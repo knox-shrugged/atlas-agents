@@ -1,0 +1,31 @@
+{
+  "name": "atlaslives-spike",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "server": "node --no-warnings=ExperimentalWarning --watch server/index.mjs",
+    "client": "vite --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "check": "tsc --noEmit",
+    "push-runtime": "node scripts/push-runtime.mjs",
+    "update-machine": "node scripts/update-machine.mjs",
+    "deploy": "npm run build && vercel deploy --prebuilt --prod"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "pg": "^8.21.0"
+  }
+}

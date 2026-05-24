@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST http://localhost:4000/api/workspaces/4c063a24-3d82-4053-b524-74c4a25f0487/agents -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('config',{}\\).get\\('env',{}\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('state:', d['state']\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('mounts:', d['config'].get\\('mounts'\\)\\); print\\('env keys:', list\\(d['config'].get\\('env',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('env:', d.get\\('config',{}\\).get\\('env'\\)\\); print\\('id:', d.get\\('id'\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(npm run server > /tmp/atlas-server.log 2>&1 & *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

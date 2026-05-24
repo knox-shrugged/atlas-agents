@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command="${1:-start}"
+
+case "$command" in
+  start)
+    if [ -n "${ATLAS_GIT_USER_NAME:-}" ]; then
+      git config --global user.name "$ATLAS_GIT_USER_NAME"
+    fi
+    if [ -n "${ATLAS_GIT_USER_EMAIL:-}" ]; then
+      git config --global user.email "$ATLAS_GIT_USER_EMAIL"
+    fi
+
+    if [ -n "${ATLAS_GITHUB_REPO:-}" ] && [ ! -d "/data/workspace/.git" ]; then
+      echo "Cloning $ATLAS_GITHUB_REPO..."
+      rm -rf /data/workspace
+      if ! git clone "https://${ATLAS_GITHUB_TOKEN}@github.com/${ATLAS_GITHUB_REPO}.git" /data/workspace 2>&1; then
+        echo "WARNING: clone failed — starting with empty workspace"
+      fi
+    fi
+
+    mkdir -p /data/workspace
+    mkdir -p /data/opencode
+
+    # Persist opencode session data on the volume
+    export XDG_DATA_HOME=/data/opencode
+
+    # Write opencode config with the default model
+    mkdir -p ~/.config/opencode
+    cat > ~/.config/opencode/config.json <<'EOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openrouter/google/gemini-2.5-flash"
+}
+EOF
+
+    cd /data/workspace
+    {
+      printf '%s opencode-agent start pid=%s workspace=/data/workspace\n' "$(date -Iseconds)" "$$"
+    } >> /data/agent.log
+
+    cat <<'BANNER'
+AtlasLives opencode-agent
+Workspace: /data/workspace
+Model:     openrouter/google/gemini-2.5-flash
+Session data: /data/opencode
+BANNER
+
+    exec opencode
+    ;;
+  *)
+    echo "Unknown opencode-agent command: $command" >&2
+    exit 64
+    ;;
+esac

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+.env
+data/
+*.log
+.DS_Store
+.vercel
+.claude/settings.local.json
+*.docx
+supabase/.temp/

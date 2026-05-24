@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+// Translates Claude Code model IDs to OpenRouter format and proxies requests
+"use strict";
+
+const http = require("http");
+const https = require("https");
+
+const MODEL_MAP = {
+  "claude-sonnet-4-5": "anthropic/claude-sonnet-4.5",
+  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.5",
+  "claude-opus-4-7": "anthropic/claude-opus-4",
+  "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+};
+
+const OPENROUTER_KEY = process.env.ANTHROPIC_API_KEY || "";
+const PORT = parseInt(process.env.PROXY_PORT || "8082", 10);
+
+const server = http.createServer((req, res) => {
+  let body = "";
+  req.on("data", (chunk) => { body += chunk; });
+  req.on("end", () => {
+    let parsed = null;
+    try { parsed = JSON.parse(body); } catch {}
+
+    if (parsed?.model) {
+      parsed.model = MODEL_MAP[parsed.model] || parsed.model;
+      body = JSON.stringify(parsed);
+    }
+
+    const outPath = req.url.replace(/^\/v1/, "/api/v1");
+
+    const options = {
+      hostname: "openrouter.ai",
+      port: 443,
+      path: outPath,
+      method: req.method,
+      headers: {
+        "content-type": req.headers["content-type"] || "application/json",
+        "anthropic-version": req.headers["anthropic-version"] || "2023-06-01",
+        "authorization": `Bearer ${OPENROUTER_KEY}`,
+        "content-length": Buffer.byteLength(body),
+        "http-referer": "https://atlaslives.dev",
+        "x-title": "AtlasLives claude-agent",
+      },
+    };
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res, { end: true });
+    });
+
+    proxyReq.on("error", (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: { message: err.message } }));
+      }
+    });
+
+    if (body) proxyReq.write(body);
+    proxyReq.end();
+  });
+});
+
+server.listen(PORT, "127.0.0.1", () => {
+  process.stdout.write(`openrouter-proxy listening on 127.0.0.1:${PORT}\n`);
+});
