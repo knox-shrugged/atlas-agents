@@ -37,6 +37,8 @@ if ! tmux has-session -t atlas-agent 2>/dev/null; then
       -e "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}" \
       -e "AGENT_EXEC=${AGENT_EXEC:-bash}" \
       "while true; do message-handler; sleep 5; done"
+    # Return focus to the agent window so ttyd opens there
+    tmux select-window -t atlas-agent:0
   fi
 fi
 

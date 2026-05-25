@@ -82,7 +82,7 @@ export default function App() {
   const [loadedAgentIds, setLoadedAgentIds] = useState<Set<string>>(new Set());
   const [workspaceName, setWorkspaceName] = useState("Demo Workspace");
   const [agentName, setAgentName] = useState("Shell Agent");
-  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent">("shell-agent");
+  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent">("shell-agent");
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -592,11 +592,11 @@ function AgentModalTrigger({
   workspaces: Workspace[];
   workspaceName: string;
   agentName: string;
-  agentKind: "shell-agent" | "opencode-agent" | "claude-agent";
+  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent";
   busy: string | null;
   onWorkspaceNameChange: (v: string) => void;
   onAgentNameChange: (v: string) => void;
-  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent") => void;
+  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent") => void;
   onCreateWorkspace: () => void;
   onCreateAgent: () => void;
   onSelectWorkspace: (id: string) => void;
@@ -690,12 +690,13 @@ function AgentModalTrigger({
             <Field label="Kind">
               <select
                 value={agentKind}
-                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent")}
+                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent")}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="shell-agent">shell-agent — bash</option>
                 <option value="opencode-agent">opencode-agent — Gemini 2.5 Flash</option>
                 <option value="claude-agent">claude-agent — Claude via OpenRouter</option>
+                <option value="pi-agent">pi-agent — pi.dev via OpenRouter</option>
               </select>
             </Field>
             {!workspace && (

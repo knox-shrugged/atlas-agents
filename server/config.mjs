@@ -10,6 +10,7 @@ export const config = {
   runtimeImage: process.env.FLY_RUNTIME_IMAGE || "",
   opencodeRuntimeImage: process.env.FLY_OPENCODE_RUNTIME_IMAGE || "",
   claudeRuntimeImage: process.env.FLY_CLAUDE_RUNTIME_IMAGE || "",
+  piRuntimeImage: process.env.FLY_PI_RUNTIME_IMAGE || "",
   flyApiHostname: process.env.FLY_API_HOSTNAME || "https://api.machines.dev",
   openrouterApiKey: process.env.OPENROUTER || "",
   supabaseUrl: process.env.SUPABASE_URL || "",

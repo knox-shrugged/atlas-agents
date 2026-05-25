@@ -87,7 +87,11 @@ export async function provisionClaudeAgent(args) {
 }
 
 export async function provisionOpenCodeAgent(args) {
-  return provisionAgent({ ...args, image: config.opencodeRuntimeImage });
+  return provisionAgent({ ...args, image: config.opencodeRuntimeImage, kind: "opencode-agent" });
+}
+
+export async function provisionPiAgent(args) {
+  return provisionAgent({ ...args, image: config.piRuntimeImage, kind: "pi-agent" });
 }
 
 export async function provisionShellAgent(args) {

@@ -80,6 +80,7 @@ Replace `provisionClaudeAgent` with `provisionShellAgent` or `provisionOpenCodeA
 | `shell-agent` | `FLY_RUNTIME_IMAGE` | bash + ttyd |
 | `opencode-agent` | `FLY_OPENCODE_RUNTIME_IMAGE` | OpenCode + Gemini 2.5 Flash via OpenRouter |
 | `claude-agent` | `FLY_CLAUDE_RUNTIME_IMAGE` | Claude Code via local OpenRouter proxy |
+| `pi-agent` | `FLY_PI_RUNTIME_IMAGE` | pi.dev CLI via OpenRouter (Node 22 required) |
 
 ## Claude-agent specifics
 

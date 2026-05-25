@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 const [, , appName, kind] = process.argv;
 
-const VALID_KINDS = ["shell-agent", "opencode-agent", "claude-agent"];
+const VALID_KINDS = ["shell-agent", "opencode-agent", "claude-agent", "pi-agent"];
 
 if (!appName || !kind || !VALID_KINDS.includes(kind)) {
   console.error(`Usage: node scripts/push-runtime.mjs <app-name> <agent-kind>`);
@@ -83,6 +83,7 @@ const agentCmd = {
   "shell-agent": "atlas-agent start",
   "opencode-agent": "opencode-agent start",
   "claude-agent": "claude-agent start",
+  "pi-agent": "pi-agent start",
 }[kind];
 
 // Restart the tmux session (window 0: agent, window 1: message-handler)
@@ -111,6 +112,7 @@ ssh(
   `    -e SUPABASE_ANON_KEY="$(printenv SUPABASE_ANON_KEY 2>/dev/null || true)" ` +
   `    -e AGENT_EXEC=${agentExec} ` +
   `    'while true; do message-handler; sleep 5; done'; ` +
+  `  tmux select-window -t atlas-agent:0; ` +
   `fi`,
   { allowFail: true }
 );
