@@ -511,9 +511,10 @@ export default function App() {
                     <span>{new Date(m.created_at).toLocaleTimeString()}</span>
                   </div>
                   <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "0.85rem" }}>{m.payload}</pre>
-                  {m.result ? (
+                  {m.result || m.status === "processing" ? (
                     <pre style={{ margin: "6px 0 0", padding: "6px", background: "#111", borderRadius: "3px", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "0.8rem", color: "#0f0" }}>
-                      {m.result}
+                      {m.result || ""}
+                      {m.status === "processing" ? <span style={{ animation: "blink 1s step-end infinite" }}>▋</span> : null}
                     </pre>
                   ) : null}
                 </div>

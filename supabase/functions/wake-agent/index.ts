@@ -26,15 +26,8 @@ Deno.serve(async (req) => {
       return new Response("agent not found", { status: 404 });
     }
 
-    if (agent.status === "running") {
-      console.log(`agent ${agent.fly_app_name} already running`);
-      return new Response(JSON.stringify({ woke: false, reason: "already running" }), {
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
     const { fly_app_name, fly_machine_id } = agent;
-    console.log(`waking ${fly_app_name} / ${fly_machine_id}`);
+    console.log(`starting ${fly_app_name} / ${fly_machine_id} (status=${agent.status})`);
 
     const flyRes = await fetch(
       `https://api.machines.dev/v1/apps/${fly_app_name}/machines/${fly_machine_id}/start`,

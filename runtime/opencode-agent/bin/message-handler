@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Drains pending Supabase messages for this agent and executes them.
+# Streams partial output to Supabase every second while the command runs.
 # AGENT_EXEC=claude → claude -p; default → bash -c
 # Requires: curl, jq (or node as fallback for JSON encoding)
 
@@ -24,31 +25,58 @@ json_encode() {
   fi
 }
 
+patch_result() {
+  local msg_id="$1" body="$2"
+  curl -sf -X PATCH \
+    "${SUPABASE_URL}/rest/v1/messages?id=eq.${msg_id}" \
+    -H "$AUTH_HEADER" -H "$API_HEADER" \
+    -H "Content-Type: application/json" \
+    -d "$body" > /dev/null || true
+}
+
 claim_and_run() {
   local msg_id="$1"
   local payload="$2"
-  echo "[message-handler] processing message $msg_id"
+  echo "[message-handler] processing $msg_id"
 
-  curl -sf -X PATCH \
-    "${SUPABASE_URL}/rest/v1/messages?id=eq.${msg_id}" \
-    -H "$AUTH_HEADER" -H "$API_HEADER" \
-    -H "Content-Type: application/json" \
-    -d '{"status":"processing"}' > /dev/null
+  patch_result "$msg_id" '{"status":"processing"}'
+
+  local tmpfile
+  tmpfile=$(mktemp)
 
   if [ "$AGENT_EXEC" = "claude" ]; then
-    result=$(claude -p "$payload" --model claude-sonnet-4-5 2>&1) || result="error: exit $?"
+    claude -p "$payload" --model claude-sonnet-4-5 > "$tmpfile" 2>&1 &
   else
-    result=$(bash -c "$payload" 2>&1) || result="error: exit $?"
+    bash -c "$payload" > "$tmpfile" 2>&1 &
   fi
+  local cmd_pid=$!
 
+  # Stream partial output every second while the command runs
+  while kill -0 "$cmd_pid" 2>/dev/null; do
+    sleep 1
+    local partial
+    partial=$(cat "$tmpfile")
+    if [ -n "$partial" ]; then
+      local partial_json
+      partial_json=$(printf '%s' "$partial" | json_encode)
+      patch_result "$msg_id" "{\"result\":${partial_json}}"
+    fi
+  done
+
+  wait "$cmd_pid"
+  local exit_code=$?
+
+  local result
+  result=$(cat "$tmpfile")
+  rm -f "$tmpfile"
+
+  [ $exit_code -ne 0 ] && [ -z "$result" ] && result="error: exit $exit_code"
+
+  local result_json
   result_json=$(printf '%s' "$result" | json_encode)
-  curl -sf -X PATCH \
-    "${SUPABASE_URL}/rest/v1/messages?id=eq.${msg_id}" \
-    -H "$AUTH_HEADER" -H "$API_HEADER" \
-    -H "Content-Type: application/json" \
-    -d "{\"status\":\"done\",\"result\":${result_json}}" > /dev/null
+  patch_result "$msg_id" "{\"status\":\"done\",\"result\":${result_json}}"
 
-  echo "[message-handler] done $msg_id"
+  echo "[message-handler] done $msg_id (exit=$exit_code)"
 }
 
 poll_once() {
