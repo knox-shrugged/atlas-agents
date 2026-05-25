@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Look up registered agents by kind, print their IDs (one per line).
+#
+# Usage:
+#   agent-lookup <kind>            # e.g. shell-agent, claude-agent
+#   agent-lookup <kind> --first    # print only the first match
+#
+# Env required: SUPABASE_URL, SUPABASE_ANON_KEY
+
+set -euo pipefail
+
+KIND="${1:-}"
+FIRST=false
+[ "${2:-}" = "--first" ] && FIRST=true
+
+if [ -z "$KIND" ]; then
+  echo "Usage: agent-lookup <kind> [--first]" >&2
+  exit 1
+fi
+
+if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+  echo "agent-lookup: SUPABASE_URL or SUPABASE_ANON_KEY not set" >&2
+  exit 1
+fi
+
+# Exclude self
+SELF="${AGENT_ID:-}"
+
+rows=$(curl -sf \
+  "${SUPABASE_URL}/rest/v1/agents?kind=eq.${KIND}&select=id,fly_app_name,status&order=last_seen.desc" \
+  -H "apikey: ${SUPABASE_ANON_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+
+if [ -n "$SELF" ]; then
+  rows=$(echo "$rows" | jq -c "[.[] | select(.id != \"$SELF\")]")
+fi
+
+if $FIRST; then
+  echo "$rows" | jq -r '.[0].id // ""'
+else
+  echo "$rows" | jq -r '.[].id'
+fi

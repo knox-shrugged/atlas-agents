@@ -55,8 +55,13 @@ RUN node -e " \
 COPY bin/claude-agent /usr/local/bin/claude-agent
 COPY bin/runtime-entrypoint /usr/local/bin/runtime-entrypoint
 COPY bin/openrouter-proxy /usr/local/bin/openrouter-proxy
+COPY bin/agent-register /usr/local/bin/agent-register
+COPY bin/message-handler /usr/local/bin/message-handler
+COPY bin/send-message /usr/local/bin/send-message
+COPY bin/wait-for-reply /usr/local/bin/wait-for-reply
+COPY bin/agent-lookup /usr/local/bin/agent-lookup
 
-RUN chmod +x /usr/local/bin/claude-agent /usr/local/bin/runtime-entrypoint
+RUN chmod +x /usr/local/bin/claude-agent /usr/local/bin/runtime-entrypoint /usr/local/bin/agent-register /usr/local/bin/message-handler /usr/local/bin/send-message /usr/local/bin/wait-for-reply /usr/local/bin/agent-lookup
 
 EXPOSE 7681
 
