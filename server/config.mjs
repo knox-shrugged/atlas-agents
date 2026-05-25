@@ -15,6 +15,7 @@ export const config = {
   openrouterApiKey: process.env.OPENROUTER || "",
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   vercelToken: process.env.VERCEL_TOKEN || "",
   supabasePat: process.env.SUPABASE_PAT || ""
 };

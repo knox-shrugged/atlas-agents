@@ -13,6 +13,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    user_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -39,6 +40,7 @@ db.exec(`
   );
 `);
 
+try { db.exec("ALTER TABLE workspaces ADD COLUMN user_id TEXT;"); } catch (_) {}
 try { db.exec("ALTER TABLE agents ADD COLUMN github_repo TEXT;"); } catch (_) {}
 try { db.exec("ALTER TABLE agents ADD COLUMN github_token TEXT;"); } catch (_) {}
 try { db.exec("ALTER TABLE agents ADD COLUMN git_user_name TEXT;"); } catch (_) {}
@@ -48,25 +50,25 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
-export function createWorkspace({ id, name }) {
+export function createWorkspace({ id, name, userId }) {
   const now = nowIso();
   db.prepare(`
-    INSERT INTO workspaces (id, name, created_at, updated_at)
-    VALUES (?, ?, ?, ?)
-  `).run(id, name, now, now);
+    INSERT INTO workspaces (id, name, user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, name, userId || null, now, now);
   return getWorkspace(id);
 }
 
-export function listWorkspaces() {
+export function listWorkspaces(userId) {
   return db.prepare(`
-    SELECT * FROM workspaces ORDER BY created_at DESC
-  `).all();
+    SELECT * FROM workspaces WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC
+  `).all(userId || null);
 }
 
-export function getWorkspace(id) {
+export function getWorkspace(id, userId) {
   return db.prepare(`
-    SELECT * FROM workspaces WHERE id = ?
-  `).get(id);
+    SELECT * FROM workspaces WHERE id = ? AND (user_id = ? OR user_id IS NULL)
+  `).get(id, userId || null);
 }
 
 export function createAgentRecord(agent) {

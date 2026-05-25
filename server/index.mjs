@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { config, publicConfig } from "./config.mjs";
 import {
   createAgentRecord,
@@ -21,6 +22,18 @@ import {
   suspendMachine
 } from "./fly-client.mjs";
 
+const supabaseAdmin = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false }
+});
+
+async function authenticate(request, reply) {
+  const token = request.headers.authorization?.replace(/^Bearer /, "");
+  if (!token) return reply.code(401).send({ error: "Unauthorized" });
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return reply.code(401).send({ error: "Unauthorized" });
+  request.userId = user.id;
+}
+
 const app = Fastify({
   logger: true
 });
@@ -30,7 +43,7 @@ app.get("/api/health", async () => ({
   config: publicConfig()
 }));
 
-app.get("/api/costs", async (_req, reply) => {
+app.get("/api/costs", { preHandler: authenticate }, async (_req, reply) => {
   const { flyApiToken, openrouterApiKey, vercelToken, supabasePat } = config;
   const VERCEL_TEAM = "team_1tOEYeZtDbrRUJLe5HnIzgBX";
   const SUPABASE_ORG = "ogoegolxrzjxhqnmrhwv";
@@ -85,22 +98,23 @@ app.get("/api/costs", async (_req, reply) => {
   };
 });
 
-app.get("/api/workspaces", async () => ({
-  workspaces: listWorkspaces()
+app.get("/api/workspaces", { preHandler: authenticate }, async (request) => ({
+  workspaces: listWorkspaces(request.userId)
 }));
 
-app.post("/api/workspaces", async (request, reply) => {
+app.post("/api/workspaces", { preHandler: authenticate }, async (request, reply) => {
   const name = cleanName(request.body?.name, "Demo Workspace");
   const workspace = createWorkspace({
     id: randomUUID(),
-    name
+    name,
+    userId: request.userId
   });
   reply.code(201);
   return { workspace };
 });
 
-app.get("/api/workspaces/:workspaceId", async (request, reply) => {
-  const workspace = getWorkspace(request.params.workspaceId);
+app.get("/api/workspaces/:workspaceId", { preHandler: authenticate }, async (request, reply) => {
+  const workspace = getWorkspace(request.params.workspaceId, request.userId);
   if (!workspace) {
     return reply.code(404).send({ error: "Workspace not found." });
   }
@@ -110,7 +124,7 @@ app.get("/api/workspaces/:workspaceId", async (request, reply) => {
   };
 });
 
-app.post("/api/workspaces/:workspaceId/agents", async (request, reply) => {
+app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, async (request, reply) => {
   const workspace = getWorkspace(request.params.workspaceId);
   if (!workspace) {
     return reply.code(404).send({ error: "Workspace not found." });
@@ -180,7 +194,7 @@ app.post("/api/workspaces/:workspaceId/agents", async (request, reply) => {
   return { agent };
 });
 
-app.get("/api/agents/:agentId", async (request, reply) => {
+app.get("/api/agents/:agentId", { preHandler: authenticate }, async (request, reply) => {
   const agent = getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
@@ -188,7 +202,7 @@ app.get("/api/agents/:agentId", async (request, reply) => {
   return { agent };
 });
 
-app.post("/api/agents/:agentId/refresh", async (request, reply) => {
+app.post("/api/agents/:agentId/refresh", { preHandler: authenticate }, async (request, reply) => {
   const agent = getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
@@ -212,7 +226,7 @@ app.post("/api/agents/:agentId/refresh", async (request, reply) => {
   }
 });
 
-app.post("/api/agents/:agentId/suspend", async (request, reply) => {
+app.post("/api/agents/:agentId/suspend", { preHandler: authenticate }, async (request, reply) => {
   const agent = getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
@@ -238,7 +252,7 @@ app.post("/api/agents/:agentId/suspend", async (request, reply) => {
   }
 });
 
-app.post("/api/agents/:agentId/resume", async (request, reply) => {
+app.post("/api/agents/:agentId/resume", { preHandler: authenticate }, async (request, reply) => {
   const agent = getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
