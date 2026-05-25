@@ -99,12 +99,12 @@ app.get("/api/costs", { preHandler: authenticate }, async (_req, reply) => {
 });
 
 app.get("/api/workspaces", { preHandler: authenticate }, async (request) => ({
-  workspaces: listWorkspaces(request.userId)
+  workspaces: await listWorkspaces(request.userId)
 }));
 
 app.post("/api/workspaces", { preHandler: authenticate }, async (request, reply) => {
   const name = cleanName(request.body?.name, "Demo Workspace");
-  const workspace = createWorkspace({
+  const workspace = await createWorkspace({
     id: randomUUID(),
     name,
     userId: request.userId
@@ -114,13 +114,13 @@ app.post("/api/workspaces", { preHandler: authenticate }, async (request, reply)
 });
 
 app.get("/api/workspaces/:workspaceId", { preHandler: authenticate }, async (request, reply) => {
-  const workspace = getWorkspace(request.params.workspaceId, request.userId);
+  const workspace = await getWorkspace(request.params.workspaceId, request.userId);
   if (!workspace) {
     return reply.code(404).send({ error: "Workspace not found." });
   }
   return {
     workspace,
-    agents: listAgents(workspace.id)
+    agents: await listAgents(workspace.id)
   };
 });
 
@@ -142,7 +142,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
 
   const id = randomUUID();
   const { appName, volumeName } = makeAgentFlyNames();
-  let agent = createAgentRecord({
+  let agent = await createAgentRecord({
     id,
     workspaceId: workspace.id,
     name: cleanName(request.body?.name, "Shell Agent"),
@@ -173,7 +173,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
       gitUserName,
       gitUserEmail
     });
-    agent = updateAgent(id, {
+    agent = await updateAgent(id, {
       status: "running",
       flyAppName: provisioned.appName,
       flyMachineId: provisioned.machineId,
@@ -184,7 +184,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
       lastError: null
     });
   } catch (error) {
-    agent = updateAgent(id, {
+    agent = await updateAgent(id, {
       status: "error",
       lastError: serializeError(error)
     });
@@ -195,7 +195,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
 });
 
 app.get("/api/agents/:agentId", { preHandler: authenticate }, async (request, reply) => {
-  const agent = getAgent(request.params.agentId);
+  const agent = await getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
   }
@@ -203,7 +203,7 @@ app.get("/api/agents/:agentId", { preHandler: authenticate }, async (request, re
 });
 
 app.post("/api/agents/:agentId/refresh", { preHandler: authenticate }, async (request, reply) => {
-  const agent = getAgent(request.params.agentId);
+  const agent = await getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
   }
@@ -213,13 +213,13 @@ app.post("/api/agents/:agentId/refresh", { preHandler: authenticate }, async (re
 
   try {
     const machine = await getMachine(agent.fly_app_name, agent.fly_machine_id);
-    const refreshed = updateAgent(agent.id, {
+    const refreshed = await updateAgent(agent.id, {
       status: mapMachineState(machine.state),
       lastError: null
     });
     return { agent: refreshed, machine };
   } catch (error) {
-    const updated = updateAgent(agent.id, {
+    const updated = await updateAgent(agent.id, {
       lastError: serializeError(error)
     });
     return reply.code(502).send({ agent: updated, error: "Failed to refresh Fly machine." });
@@ -227,7 +227,7 @@ app.post("/api/agents/:agentId/refresh", { preHandler: authenticate }, async (re
 });
 
 app.post("/api/agents/:agentId/suspend", { preHandler: authenticate }, async (request, reply) => {
-  const agent = getAgent(request.params.agentId);
+  const agent = await getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
   }
@@ -235,16 +235,16 @@ app.post("/api/agents/:agentId/suspend", { preHandler: authenticate }, async (re
     return reply.code(400).send({ error: "Agent has no Fly machine yet." });
   }
 
-  updateAgent(agent.id, { status: "suspending", lastError: null });
+  await updateAgent(agent.id, { status: "suspending", lastError: null });
   try {
     const machine = await suspendMachine(agent.fly_app_name, agent.fly_machine_id);
-    const updated = updateAgent(agent.id, {
+    const updated = await updateAgent(agent.id, {
       status: mapMachineState(machine.state),
       lastError: null
     });
     return { agent: updated, machine };
   } catch (error) {
-    const updated = updateAgent(agent.id, {
+    const updated = await updateAgent(agent.id, {
       status: "error",
       lastError: serializeError(error)
     });
@@ -253,7 +253,7 @@ app.post("/api/agents/:agentId/suspend", { preHandler: authenticate }, async (re
 });
 
 app.post("/api/agents/:agentId/resume", { preHandler: authenticate }, async (request, reply) => {
-  const agent = getAgent(request.params.agentId);
+  const agent = await getAgent(request.params.agentId);
   if (!agent) {
     return reply.code(404).send({ error: "Agent not found." });
   }
@@ -261,16 +261,16 @@ app.post("/api/agents/:agentId/resume", { preHandler: authenticate }, async (req
     return reply.code(400).send({ error: "Agent has no Fly machine yet." });
   }
 
-  updateAgent(agent.id, { status: "resuming", lastError: null });
+  await updateAgent(agent.id, { status: "resuming", lastError: null });
   try {
     const machine = await startMachine(agent.fly_app_name, agent.fly_machine_id);
-    const updated = updateAgent(agent.id, {
+    const updated = await updateAgent(agent.id, {
       status: mapMachineState(machine.state),
       lastError: null
     });
     return { agent: updated, machine };
   } catch (error) {
-    const updated = updateAgent(agent.id, {
+    const updated = await updateAgent(agent.id, {
       status: "error",
       lastError: serializeError(error)
     });

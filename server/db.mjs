@@ -1,127 +1,91 @@
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { createClient } from "@supabase/supabase-js";
+import { config } from "./config.mjs";
 
-const dbPath = join(process.cwd(), "data", "atlaslives.sqlite");
-mkdirSync(dirname(dbPath), { recursive: true });
+const db = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false }
+});
 
-export const db = new DatabaseSync(dbPath);
-db.exec("PRAGMA journal_mode = WAL;");
-db.exec("PRAGMA foreign_keys = ON;");
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS workspaces (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    user_id TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS agents (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    status TEXT NOT NULL,
-    fly_app_name TEXT,
-    fly_machine_id TEXT,
-    fly_volume_name TEXT,
-    fly_volume_id TEXT,
-    fly_region TEXT,
-    terminal_url TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    last_error TEXT,
-    github_repo TEXT,
-    github_token TEXT,
-    git_user_name TEXT,
-    git_user_email TEXT
-  );
-`);
-
-try { db.exec("ALTER TABLE workspaces ADD COLUMN user_id TEXT;"); } catch (_) {}
-try { db.exec("ALTER TABLE agents ADD COLUMN github_repo TEXT;"); } catch (_) {}
-try { db.exec("ALTER TABLE agents ADD COLUMN github_token TEXT;"); } catch (_) {}
-try { db.exec("ALTER TABLE agents ADD COLUMN git_user_name TEXT;"); } catch (_) {}
-try { db.exec("ALTER TABLE agents ADD COLUMN git_user_email TEXT;"); } catch (_) {}
-
-export function nowIso() {
+function nowIso() {
   return new Date().toISOString();
 }
 
-export function createWorkspace({ id, name, userId }) {
+function dbError(context, error) {
+  throw new Error(`DB ${context}: ${error.message}`);
+}
+
+export async function createWorkspace({ id, name, userId }) {
   const now = nowIso();
-  db.prepare(`
-    INSERT INTO workspaces (id, name, user_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, name, userId || null, now, now);
-  return getWorkspace(id);
+  const { data, error } = await db.from("workspaces").insert({
+    id, name, user_id: userId || null, created_at: now, updated_at: now
+  }).select().single();
+  if (error) dbError("createWorkspace", error);
+  return data;
 }
 
-export function listWorkspaces(userId) {
-  return db.prepare(`
-    SELECT * FROM workspaces WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC
-  `).all(userId || null);
+export async function listWorkspaces(userId) {
+  const { data, error } = await db.from("workspaces")
+    .select("*")
+    .or(`user_id.eq.${userId},user_id.is.null`)
+    .order("created_at", { ascending: false });
+  if (error) dbError("listWorkspaces", error);
+  return data;
 }
 
-export function getWorkspace(id, userId) {
-  return db.prepare(`
-    SELECT * FROM workspaces WHERE id = ? AND (user_id = ? OR user_id IS NULL)
-  `).get(id, userId || null);
+export async function getWorkspace(id, userId) {
+  const { data, error } = await db.from("workspaces")
+    .select("*")
+    .eq("id", id)
+    .or(`user_id.eq.${userId},user_id.is.null`)
+    .single();
+  if (error) return null;
+  return data;
 }
 
-export function createAgentRecord(agent) {
+export async function createAgentRecord(agent) {
   const now = nowIso();
-  db.prepare(`
-    INSERT INTO agents (
-      id, workspace_id, name, kind, status, fly_app_name, fly_machine_id,
-      fly_volume_name, fly_volume_id, fly_region, terminal_url,
-      created_at, updated_at, last_error, github_repo, github_token,
-      git_user_name, git_user_email
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    agent.id,
-    agent.workspaceId,
-    agent.name,
-    agent.kind,
-    agent.status,
-    agent.flyAppName || null,
-    agent.flyMachineId || null,
-    agent.flyVolumeName || null,
-    agent.flyVolumeId || null,
-    agent.flyRegion || null,
-    agent.terminalUrl || null,
-    now,
-    now,
-    agent.lastError || null,
-    agent.githubRepo || null,
-    agent.githubToken || null,
-    agent.gitUserName || null,
-    agent.gitUserEmail || null
-  );
-  return getAgent(agent.id);
+  const { data, error } = await db.from("workspace_agents").insert({
+    id: agent.id,
+    workspace_id: agent.workspaceId,
+    name: agent.name,
+    kind: agent.kind,
+    status: agent.status,
+    fly_app_name: agent.flyAppName || null,
+    fly_machine_id: agent.flyMachineId || null,
+    fly_volume_name: agent.flyVolumeName || null,
+    fly_volume_id: agent.flyVolumeId || null,
+    fly_region: agent.flyRegion || null,
+    terminal_url: agent.terminalUrl || null,
+    last_error: agent.lastError || null,
+    github_repo: agent.githubRepo || null,
+    github_token: agent.githubToken || null,
+    git_user_name: agent.gitUserName || null,
+    git_user_email: agent.gitUserEmail || null,
+    created_at: now,
+    updated_at: now,
+  }).select().single();
+  if (error) dbError("createAgentRecord", error);
+  return data;
 }
 
-export function listAgents(workspaceId) {
-  return db.prepare(`
-    SELECT * FROM agents WHERE workspace_id = ? ORDER BY created_at DESC
-  `).all(workspaceId);
+export async function listAgents(workspaceId) {
+  const { data, error } = await db.from("workspace_agents")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
+  if (error) dbError("listAgents", error);
+  return data;
 }
 
-export function getAgent(id) {
-  return db.prepare(`
-    SELECT * FROM agents WHERE id = ?
-  `).get(id);
+export async function getAgent(id) {
+  const { data, error } = await db.from("workspace_agents")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) return null;
+  return data;
 }
 
-export function updateAgent(id, fields) {
-  const entries = Object.entries(fields).filter(([, value]) => value !== undefined);
-  if (!entries.length) {
-    return getAgent(id);
-  }
-
+export async function updateAgent(id, fields) {
   const columnMap = {
     status: "status",
     flyAppName: "fly_app_name",
@@ -134,29 +98,20 @@ export function updateAgent(id, fields) {
     githubRepo: "github_repo",
     githubToken: "github_token",
     gitUserName: "git_user_name",
-    gitUserEmail: "git_user_email"
+    gitUserEmail: "git_user_email",
   };
 
-  const assignments = [];
-  const values = [];
-  for (const [key, value] of entries) {
-    const column = columnMap[key];
-    if (!column) {
-      continue;
-    }
-    assignments.push(`${column} = ?`);
-    values.push(value);
+  const update = { updated_at: nowIso() };
+  for (const [key, value] of Object.entries(fields)) {
+    const col = columnMap[key];
+    if (col) update[col] = value ?? null;
   }
 
-  assignments.push("updated_at = ?");
-  values.push(nowIso(), id);
-
-  db.prepare(`
-    UPDATE agents
-    SET ${assignments.join(", ")}
-    WHERE id = ?
-  `).run(...values);
-
-  return getAgent(id);
+  const { data, error } = await db.from("workspace_agents")
+    .update(update)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) dbError("updateAgent", error);
+  return data;
 }
-
