@@ -1,6 +1,6 @@
 # AtlasLives — Product Requirements Document
 
-**Status:** Post-spike, pre-V1
+**Status:** V1 in progress — UI shell complete
 **Last updated:** May 2026
 **Spike repo:** knox-shrugged/atlas-agents
 
@@ -67,10 +67,14 @@ The spike validated the core technical bets:
 - Agents can push branches, open PRs, post comments via the GitHub API
 
 ### 3.6 Operational Dashboard
-- Live agent registry with status indicators
-- Message history with streaming output
-- Suspend / resume / refresh controls per agent
+- Dark sidebar navigation: Agents, Messages, Registry, Costs
+- Agent list per workspace; clicking an agent opens its terminal inline (iframe)
+- Terminal tabs cached in the DOM — switching between agents is instant, no reconnect
+- Refresh / suspend / resume controls in the header when an agent is selected
+- Message composer + live history with streaming output and blinking cursor
+- Live agent registry via Supabase Realtime
 - Cost dashboard (OpenRouter, Fly.io, Vercel, Supabase)
+- "New workspace" and "New agent" modals; agent modal stays open with progress message during Fly provisioning (~30s)
 
 ### 3.7 Atlas Model Gateway
 - Agents never hold raw API keys — keys are injected as Fly secrets at provisioning time
@@ -182,13 +186,16 @@ Agent streams partial output to UI every 1s while task runs. Proven.
 ### ✅ Milestone 6 — Multi-agent coordination
 Agents can discover, message, and wait on each other. send-message / wait-for-reply / agent-lookup working. Proven.
 
-### 🔜 Milestone 7 — GitHub webhook → agent trigger
+### ✅ Milestone 7 — Production UI shell
+React + Tailwind v4 + shadcn/ui. Dark sidebar with workspace-scoped agent list. Inline terminal iframe per agent, cached in DOM for instant tab switching. Modals for workspace/agent creation with provisioning progress state. Deployed to Vercel.
+
+### 🔜 Milestone 8 — GitHub webhook → agent trigger
 GitHub webhook on PR/push inserts a message. Agent reviews code, posts comment. First external integration.
 
-### 🔜 Milestone 8 — On-demand agent provisioning from coordinator
+### 🔜 Milestone 9 — On-demand agent provisioning from coordinator
 Coordinator provisions a new Fly Machine for a task, tears it down on completion. Elastic compute.
 
-### 🔜 Milestone 9 — Production-grade deployment
+### 🔜 Milestone 10 — Production-grade deployment
 Auth (Supabase Auth or Clerk), proper multi-user workspaces, server deployed to Fly instead of local.
 
 ---
