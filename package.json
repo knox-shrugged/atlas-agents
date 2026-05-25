@@ -11,6 +11,7 @@
     "check": "tsc --noEmit",
     "push-runtime": "node scripts/push-runtime.mjs",
     "update-machine": "node scripts/update-machine.mjs",
+    "sql": "node scripts/run-sql.mjs",
     "deploy": "vercel deploy --prod"
   },
   "dependencies": {

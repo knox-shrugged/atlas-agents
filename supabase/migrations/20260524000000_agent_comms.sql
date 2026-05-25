@@ -70,3 +70,7 @@ drop trigger if exists messages_wake_agent on messages;
 create trigger messages_wake_agent
   after insert on messages
   for each row execute function public.notify_wake_agent();
+
+-- Enable Supabase Realtime for both tables
+alter publication supabase_realtime add table agents;
+alter publication supabase_realtime add table messages;
