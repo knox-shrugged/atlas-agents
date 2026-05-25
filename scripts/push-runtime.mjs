@@ -25,7 +25,9 @@ if (!appName || !kind || !VALID_KINDS.includes(kind)) {
   process.exit(1);
 }
 
-const binDir = join("runtime", kind, "bin");
+// Collect scripts from base (shared) and the agent-specific dir, agent-specific wins on conflict
+const baseBinDir = join("runtime", "base", "bin");
+const kindBinDir = join("runtime", kind, "bin");
 
 const FLY_API_TOKEN =
   process.env.FLY_API_TOKEN ||
@@ -59,10 +61,19 @@ function ssh(cmd, opts = {}) {
   return fly(["ssh", "console", "-a", appName, "-C", `bash -c ${JSON.stringify(cmd)}`], opts);
 }
 
-// Push each bin file via base64 over SSH (no sftp needed, works for text and binary)
+// Merge base + kind-specific scripts; kind-specific wins on conflict
+const files = new Map();
+for (const dir of [baseBinDir, kindBinDir]) {
+  try {
+    for (const file of readdirSync(dir)) {
+      files.set(file, join(dir, file));
+    }
+  } catch { /* dir may not exist */ }
+}
+
 console.log(`Pushing ${kind} scripts → ${appName}:/usr/local/bin/`);
-for (const file of readdirSync(binDir)) {
-  const content = readFileSync(join(binDir, file));
+for (const [file, filePath] of files) {
+  const content = readFileSync(filePath);
   const b64 = content.toString("base64");
   console.log(`  → ${file}`);
   ssh(`echo '${b64}' | base64 -d > /usr/local/bin/${file} && chmod +x /usr/local/bin/${file}`);

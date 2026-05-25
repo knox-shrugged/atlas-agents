@@ -1,36 +1,27 @@
-# Fly Machines run amd64 — always build with --platform linux/amd64
-FROM --platform=linux/amd64 debian:bookworm-slim
-
-ARG TARGETARCH
-ARG TTYD_VERSION=1.7.7
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    curl \
-    git \
-    tmux \
-    nodejs \
-    npm \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN set -eux; \
-  case "${TARGETARCH:-amd64}" in \
-    amd64) ttyd_arch="x86_64" ;; \
-    arm64) ttyd_arch="aarch64" ;; \
-    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-  esac; \
-  curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${ttyd_arch}" -o /usr/local/bin/ttyd; \
-  chmod +x /usr/local/bin/ttyd
+FROM --platform=linux/amd64 registry.fly.io/atlas-base:latest
 
 RUN npm install -g opencode-ai
 
-COPY bin/opencode-agent /usr/local/bin/opencode-agent
-COPY bin/runtime-entrypoint /usr/local/bin/runtime-entrypoint
+# Bake opencode config with the Atlas MCP server
+RUN mkdir -p /root/.config/opencode && node -e " \
+  const fs=require('fs'); \
+  const c={ \
+    '\$schema':'https://opencode.ai/config.json', \
+    model:'openrouter/google/gemini-2.5-flash', \
+    mcp:{ \
+      atlas:{ \
+        type:'local', \
+        command:['node','/usr/local/lib/atlas-mcp/index.js'] \
+      } \
+    } \
+  }; \
+  fs.writeFileSync('/root/.config/opencode/config.json',JSON.stringify(c,null,2)); \
+"
 
-RUN chmod +x /usr/local/bin/opencode-agent /usr/local/bin/runtime-entrypoint
+# AGENT_KIND drives registration + the tmux startup command
+# AGENT_EXEC=bash tells message-handler to run payloads as shell commands
+ENV AGENT_KIND=opencode-agent
+ENV AGENT_EXEC=bash
 
-EXPOSE 7681
-
-ENTRYPOINT ["/usr/local/bin/runtime-entrypoint"]
+COPY bin/opencode-agent /usr/local/bin/
+RUN chmod +x /usr/local/bin/opencode-agent

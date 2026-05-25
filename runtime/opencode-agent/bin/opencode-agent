@@ -26,15 +26,6 @@ case "$command" in
     # Persist opencode session data on the volume
     export XDG_DATA_HOME=/data/opencode
 
-    # Write opencode config with the default model
-    mkdir -p ~/.config/opencode
-    cat > ~/.config/opencode/config.json <<'EOF'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "openrouter/google/gemini-2.5-flash"
-}
-EOF
-
     cd /data/workspace
     {
       printf '%s opencode-agent start pid=%s workspace=/data/workspace\n' "$(date -Iseconds)" "$$"

@@ -93,6 +93,7 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [costs, setCosts] = useState<Costs | null>(null);
   const [costsLoading, setCostsLoading] = useState(false);
+
   useEffect(() => {
     void loadInitialState();
     void loadSbAgents();
@@ -214,6 +215,10 @@ export default function App() {
       setCostsLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (nav === "costs") void loadCosts();
+  }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function replaceAgent(agent: Agent) {
     setAgents((prev) => prev.map((a) => (a.id === agent.id ? agent : a)));

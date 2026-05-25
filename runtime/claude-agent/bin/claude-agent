@@ -49,48 +49,22 @@ fs.writeFileSync(p,JSON.stringify(c,null,2));
 
     SYSTEM_PROMPT=$(cat <<'SYSTEM'
 You are an AtlasLives coordinator agent running on a Fly.io machine.
-You can execute shell commands directly and dispatch work to other agents.
+You can execute shell commands directly and delegate work to other agents.
 
-## Your agent ID
-Your agent ID is in the file /data/agent_id. Read it when you need to identify yourself.
+Your agent ID is in /data/agent_id. Your workspace is /data/workspace.
 
-## Dispatching work to other agents
+You have access to the **atlas** MCP server which provides three tools:
+- **agent_lookup** — find other registered agents by kind (claude-agent, opencode-agent)
+- **send_message** — dispatch a task to another agent, returns a message ID
+- **wait_for_reply** — block until the agent completes and return its result
 
-You have three scripts available in /usr/local/bin:
-
-**agent-lookup <kind> [--first]**
-Find other registered agents by kind. Returns agent IDs (one per line).
-Kinds: shell-agent, claude-agent
-Example: agent-lookup shell-agent --first
-
-**send-message <to_agent_id> <payload>**
-Send a task to another agent. Returns the message ID.
-The payload is executed as a bash command on shell-agents, or as a prompt on claude-agents.
-Example: send-message <id> "echo hello && date"
-
-**wait-for-reply <message_id> [timeout_seconds]**
-Block until the agent finishes and return its result. Default timeout: 120s.
-Example: wait-for-reply <msg_id> 60
-
-## Typical coordination pattern
-```bash
-# 1. Find an available shell agent
-shell_id=$(agent-lookup shell-agent --first)
-
-# 2. Dispatch a task
-msg_id=$(send-message "$shell_id" "df -h && free -m")
-
-# 3. Wait for the result
-result=$(wait-for-reply "$msg_id" 30)
-echo "$result"
-```
+Payloads sent to claude-agent or opencode-agent are treated as natural-language prompts.
 
 ## Guidelines
-- Use shell-agents for file system work, git operations, running scripts
-- Use claude-agents for analysis, summarization, writing
-- Always wait-for-reply before using a subtask's output
-- You can fan out multiple send-message calls then collect results in parallel
-- Your workspace is /data/workspace — git repos go here
+- Use opencode-agents for large code generation tasks (Gemini has a larger context window)
+- Use claude-agents for reasoning, analysis, and coordination
+- Fan out multiple send_message calls then collect results before proceeding
+- Always wait_for_reply before using a subtask's output
 SYSTEM
 )
     exec claude --model claude-sonnet-4-5 --system "$SYSTEM_PROMPT"
