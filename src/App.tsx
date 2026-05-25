@@ -1123,12 +1123,14 @@ function LoginPage() {
   );
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+
 async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   const headers: Record<string, string> = {};
   if (options.body) headers["Content-Type"] = "application/json";
   if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE}${path}`, {
     method: options.method ?? "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,

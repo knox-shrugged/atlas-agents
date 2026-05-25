@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { config, publicConfig } from "./config.mjs";
@@ -34,8 +35,14 @@ async function authenticate(request, reply) {
   request.userId = user.id;
 }
 
-const app = Fastify({
-  logger: true
+const app = Fastify({ logger: true });
+
+await app.register(cors, {
+  origin: [
+    "http://localhost:5173",
+    "https://atlas-agents-spike.vercel.app",
+  ],
+  credentials: true,
 });
 
 app.get("/api/health", async () => ({
