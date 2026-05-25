@@ -113,10 +113,27 @@ Browser (React/Vite)
   └── Fly.io Machines (one per agent)
         ├── ttyd (browser terminal, port 7681)
         ├── tmux (session persistence)
-        ├── runtime-entrypoint (registers agent, starts handler)
+        ├── runtime-entrypoint (generic; reads AGENT_KIND/AGENT_EXEC from image ENV)
         ├── message-handler (polls + executes messages, streams output)
-        ├── send-message / wait-for-reply / agent-lookup (coordination)
-        └── agent binary (claude / opencode / bash)
+        ├── Atlas MCP server (send_message / wait_for_reply / agent_lookup via stdio)
+        └── agent binary (claude-agent or opencode-agent)
+
+### Docker Image Hierarchy
+```
+atlas-base
+  ├── ttyd + tmux + jq + Node.js
+  ├── shared scripts (runtime-entrypoint, agent-register, message-handler,
+  │   send-message, wait-for-reply, agent-lookup)
+  └── Atlas MCP server (/usr/local/lib/atlas-mcp/)
+        │
+        ├── atlas-claude-agent
+        │     ├── @anthropic-ai/claude-code
+        │     ├── openrouter-proxy (translates model IDs → OpenRouter format)
+        │     └── .claude.json with mcpServers.atlas wired to MCP server
+        │
+        └── atlas-opencode-agent
+              ├── opencode-ai
+              └── ~/.config/opencode/config.json with mcp.atlas wired to MCP server
 ```
 
 ### Agent Lifecycle
@@ -161,7 +178,7 @@ User (UI) ──INSERT──→ messages table
 | Local state | SQLite (agent/workspace records) |
 | Agent runtime | Fly.io Machines + Fly Volumes |
 | Terminal | ttyd + tmux |
-| Models | Claude Code, OpenCode (Gemini), bash — all via OpenRouter |
+| Models | Claude Code (claude-agent), OpenCode/Gemini (opencode-agent) — via OpenRouter |
 | Deployment | Vercel (frontend), local server for now |
 
 ---
@@ -189,21 +206,24 @@ Agents can discover, message, and wait on each other. send-message / wait-for-re
 ### ✅ Milestone 7 — Production UI shell
 React + Tailwind v4 + shadcn/ui. Dark sidebar with workspace-scoped agent list. Inline terminal iframe per agent, cached in DOM for instant tab switching. Modals for workspace/agent creation with provisioning progress state. Deployed to Vercel.
 
-### 🔜 Milestone 8 — GitHub webhook → agent trigger
+### ✅ Milestone 8 — Base image + Atlas MCP server
+Consolidated shared runtime scripts and generic entrypoint into `atlas-base`. Atlas MCP server exposes `send_message`, `wait_for_reply`, `agent_lookup` via stdio — discovered automatically by Claude Code and OpenCode without prompt engineering. Agent Dockerfiles reduced to ~25 lines each.
+
+### 🔜 Milestone 9 — GitHub webhook → agent trigger
 GitHub webhook on PR/push inserts a message. Agent reviews code, posts comment. First external integration.
 
-### 🔜 Milestone 9 — On-demand agent provisioning from coordinator
+### 🔜 Milestone 10 — On-demand agent provisioning from coordinator
 Coordinator provisions a new Fly Machine for a task, tears it down on completion. Elastic compute.
 
-### 🔜 Milestone 10 — Production-grade deployment
+### 🔜 Milestone 11 — Production-grade deployment
 Auth (Supabase Auth or Clerk), proper multi-user workspaces, server deployed to Fly instead of local.
 
 ---
 
 ## 8. Open Questions
 
-1. **Coordinator model** — should the coordinator always be a claude-agent, or can any agent kind coordinate?
-2. **Task UI** — should tasks be a first-class entity (separate from messages), or is the message queue sufficient?
-3. **Agent memory** — is `/data/memory.md` enough for V1, or do we need vector search?
-4. **Server deployment** — Fastify API is currently localhost. Needs to move to Fly or Vercel for production.
-5. **Cost controls** — OpenRouter usage API gives spend data but no hard budget enforcement yet. How do we gate?
+1. **Task UI** — should tasks be a first-class entity (separate from messages), or is the message queue sufficient?
+2. **Agent memory** — is `/data/memory.md` enough for V1, or do we need vector search?
+3. **Server deployment** — Fastify API is currently localhost. Needs to move to Fly or Vercel for production.
+4. **Cost controls** — OpenRouter usage API gives spend data but no hard budget enforcement yet. How do we gate?
+5. **MCP server env** — SUPABASE_URL/ANON_KEY/AGENT_ID must be in the tmux session for Claude to inherit them when spawning the MCP server. Needs verification on first full image build.
