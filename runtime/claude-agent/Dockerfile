@@ -9,8 +9,6 @@ RUN node -e " \
   const c={ \
     hasCompletedOnboarding:true, \
     lastOnboardingVersion:'2.1.150', \
-    opusProMigrationComplete:true, \
-    sonnet1m45MigrationComplete:true, \
     seenNotifications:{}, \
     migrationVersion:13, \
     mcpServers:{ \

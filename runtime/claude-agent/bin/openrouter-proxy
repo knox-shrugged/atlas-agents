@@ -1,19 +1,38 @@
 #!/usr/bin/env node
-// Translates Claude Code model IDs to OpenRouter format and proxies requests
+// Translates Claude Code model IDs to OpenRouter format, proxies requests, and
+// rewrites response model IDs back to the original so Claude Code's response
+// validation passes.
 "use strict";
 
 const http = require("http");
 const https = require("https");
 
+// Map Claude Code model IDs → OpenRouter model IDs.
+// Source: https://openrouter.ai/api/v1/models (anthropic/* entries).
 const MODEL_MAP = {
+  "claude-opus-4-7": "anthropic/claude-opus-4.7",
+  "claude-opus-4-6": "anthropic/claude-opus-4.6",
+  "claude-opus-4-5": "anthropic/claude-opus-4.5",
+  "claude-opus-4-1": "anthropic/claude-opus-4.1",
+  "claude-opus-4":   "anthropic/claude-opus-4",
+  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
   "claude-sonnet-4-5": "anthropic/claude-sonnet-4.5",
-  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.5",
-  "claude-opus-4-7": "anthropic/claude-opus-4",
-  "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+  "claude-sonnet-4":   "anthropic/claude-sonnet-4",
+  "claude-haiku-4-5":  "anthropic/claude-haiku-4.5",
+  "claude-3-5-haiku":  "anthropic/claude-3.5-haiku",
+  "claude-3-haiku":    "anthropic/claude-3-haiku",
 };
 
 const OPENROUTER_KEY = process.env.ANTHROPIC_API_KEY || "";
 const PORT = parseInt(process.env.PROXY_PORT || "8082", 10);
+
+// Build a regex that matches any value the upstream might use for our mapped models.
+// Covers exact OpenRouter IDs and OpenRouter's resolved snapshot IDs (e.g.
+// "anthropic/claude-4.7-opus-20260416"). We replace the JSON-encoded model field.
+function rewriteModelInChunk(chunkStr, requestedModel) {
+  // Replace any "model":"anthropic/..." with the requested model id.
+  return chunkStr.replace(/"model"\s*:\s*"anthropic\/[^"]+"/g, `"model":${JSON.stringify(requestedModel)}`);
+}
 
 const server = http.createServer((req, res) => {
   let body = "";
@@ -22,8 +41,13 @@ const server = http.createServer((req, res) => {
     let parsed = null;
     try { parsed = JSON.parse(body); } catch {}
 
+    // Preserve the model ID the client requested so we can echo it back in the response.
+    const requestedModel = parsed?.model ?? null;
+
     if (parsed?.model) {
-      parsed.model = MODEL_MAP[parsed.model] || parsed.model;
+      // Strip variant suffixes like "[1m]" before lookup
+      const base = parsed.model.replace(/\[.*?\]$/, "");
+      parsed.model = MODEL_MAP[base] || MODEL_MAP[parsed.model] || parsed.model;
       body = JSON.stringify(parsed);
     }
 
@@ -45,8 +69,25 @@ const server = http.createServer((req, res) => {
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res, { end: true });
+      // Strip content-length — we may rewrite chunk sizes.
+      const headers = { ...proxyRes.headers };
+      delete headers["content-length"];
+      res.writeHead(proxyRes.statusCode, headers);
+
+      if (!requestedModel) {
+        proxyRes.pipe(res, { end: true });
+        return;
+      }
+
+      // Stream-transform: rewrite "model" field in any chunk we forward.
+      // Safe because SSE events from OpenRouter chunk on newlines, and the JSON
+      // value of `model` always lives on a single line in `data: {...}` frames.
+      proxyRes.setEncoding("utf8");
+      proxyRes.on("data", (chunk) => {
+        res.write(rewriteModelInChunk(chunk, requestedModel));
+      });
+      proxyRes.on("end", () => res.end());
+      proxyRes.on("error", () => res.end());
     });
 
     proxyReq.on("error", (err) => {

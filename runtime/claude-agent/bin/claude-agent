@@ -47,7 +47,29 @@ fs.writeFileSync(p,JSON.stringify(c,null,2));
 "
     fi
 
-    SYSTEM_PROMPT=$(cat <<'SYSTEM'
+    # Wire up Composio MCP server if API key is available
+    if [ -n "${COMPOSIO_API_KEY:-}" ]; then
+      node -e "
+const fs=require('fs'),os=require('os');
+const p=os.homedir()+'/.claude.json';
+let c={};
+try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}
+if(!c.mcpServers){c.mcpServers={};}
+c.mcpServers.composio={
+  command:'npx',
+  args:['-y','@composio/mcp@latest','start','--composio-api-key',process.env.COMPOSIO_API_KEY,'--entity-id',process.env.COMPOSIO_ENTITY_ID||'default'],
+  type:'stdio'
+};
+fs.writeFileSync(p,JSON.stringify(c,null,2));
+"
+    fi
+
+    COMPOSIO_LINE=""
+    if [ -n "${COMPOSIO_API_KEY:-}" ]; then
+      COMPOSIO_LINE="You also have access to the **composio** MCP server which gives you OAuth-connected tools (GitHub, Gmail, Linear, Notion, Slack, etc.) for the workspace owner."
+    fi
+
+    SYSTEM_PROMPT=$(cat <<SYSTEM
 You are an AtlasLives coordinator agent running on a Fly.io machine.
 You can execute shell commands directly and delegate work to other agents.
 
@@ -60,6 +82,8 @@ You have access to the **atlas** MCP server which provides three tools:
 
 Payloads sent to claude-agent or opencode-agent are treated as natural-language prompts.
 
+$COMPOSIO_LINE
+
 ## Guidelines
 - Use opencode-agents for large code generation tasks (Gemini has a larger context window)
 - Use claude-agents for reasoning, analysis, and coordination
@@ -67,7 +91,7 @@ Payloads sent to claude-agent or opencode-agent are treated as natural-language 
 - Always wait_for_reply before using a subtask's output
 SYSTEM
 )
-    exec claude --model claude-sonnet-4-5 --system "$SYSTEM_PROMPT"
+    exec claude --model claude-sonnet-4-5 --append-system-prompt "$SYSTEM_PROMPT"
     ;;
   *)
     echo "Unknown claude-agent command: $command" >&2
