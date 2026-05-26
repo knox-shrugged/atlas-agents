@@ -38,6 +38,22 @@ Model:     openrouter/google/gemini-2.5-flash
 Session data: /data/opencode
 BANNER
 
+    # Wire up Composio MCP server if API key is available
+    if [ -n "${COMPOSIO_API_KEY:-}" ]; then
+      node -e "
+const fs=require('fs');
+const p='/root/.config/opencode/config.json';
+let c={};
+try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}
+if(!c.mcp){c.mcp={};}
+c.mcp.composio={
+  type:'local',
+  command:['npx','-y','@composio/mcp@latest','start','--composio-api-key',process.env.COMPOSIO_API_KEY,'--entity-id',process.env.COMPOSIO_ENTITY_ID||'default']
+};
+fs.writeFileSync(p,JSON.stringify(c,null,2));
+"
+    fi
+
     exec opencode
     ;;
   *)

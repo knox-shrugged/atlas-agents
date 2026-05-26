@@ -82,6 +82,10 @@ export async function startMachine(appName, machineId) {
   return getMachine(appName, machineId);
 }
 
+export async function destroyApp(appName) {
+  return flyRequest(`/apps/${appName}`, { method: "DELETE" });
+}
+
 export async function provisionClaudeAgent(args) {
   return provisionAgent({ ...args, image: config.claudeRuntimeImage, kind: "claude-agent" });
 }
@@ -95,7 +99,11 @@ export async function provisionPiAgent(args) {
 }
 
 export async function provisionShellAgent(args) {
-  return provisionAgent({ ...args, image: config.runtimeImage });
+  return provisionAgent({ ...args, image: config.runtimeImage, kind: "shell-agent" });
+}
+
+export async function provisionCodexAgent(args) {
+  return provisionAgent({ ...args, image: config.codexRuntimeImage, kind: "codex-agent" });
 }
 
 async function provisionAgent({
@@ -107,7 +115,9 @@ async function provisionAgent({
   githubRepo,
   githubToken,
   gitUserName,
-  gitUserEmail
+  gitUserEmail,
+  openrouterKey,
+  composioEntityId,
 }) {
   requireFlyConfig(image);
 
@@ -122,17 +132,28 @@ async function provisionAgent({
   await allocateSharedIpv4(appName);
   await allocateIpv6(appName);
 
+  const orKey = openrouterKey || config.openrouterApiKey;
   const secrets = [];
-  if (config.openrouterApiKey) {
-    secrets.push({ key: "OPENROUTER_API_KEY", value: config.openrouterApiKey });
+  if (orKey) {
+    secrets.push({ key: "OPENROUTER_API_KEY", value: orKey });
     if (kind === "claude-agent") {
-      secrets.push({ key: "ANTHROPIC_API_KEY", value: config.openrouterApiKey });
-      secrets.push({ key: "ANTHROPIC_BASE_URL", value: "https://openrouter.ai/api/v1" });
+      // ANTHROPIC_BASE_URL is set by the Dockerfile to the local openrouter-proxy
+      // (http://127.0.0.1:8082) which rewrites model IDs. Don't override it here.
+      secrets.push({ key: "ANTHROPIC_API_KEY", value: orKey });
     }
   }
   if (config.supabaseUrl) {
     secrets.push({ key: "SUPABASE_URL", value: config.supabaseUrl });
     secrets.push({ key: "SUPABASE_ANON_KEY", value: config.supabaseAnonKey });
+  }
+  if (config.composioApiKey && kind !== "shell-agent") {
+    secrets.push({ key: "COMPOSIO_API_KEY", value: config.composioApiKey });
+    if (composioEntityId) {
+      secrets.push({ key: "COMPOSIO_ENTITY_ID", value: composioEntityId });
+    }
+  }
+  if (githubToken) {
+    secrets.push({ key: "ATLAS_GITHUB_TOKEN", value: githubToken });
   }
   if (secrets.length) {
     await flyGraphql({
@@ -164,7 +185,6 @@ async function provisionAgent({
           Object.entries({
             AGENT_KIND: kind,
             ATLAS_GITHUB_REPO: githubRepo,
-            ATLAS_GITHUB_TOKEN: githubToken,
             ATLAS_GIT_USER_NAME: gitUserName,
             ATLAS_GIT_USER_EMAIL: gitUserEmail
           }).filter(([, v]) => v)

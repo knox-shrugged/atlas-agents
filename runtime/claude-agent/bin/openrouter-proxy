@@ -53,22 +53,42 @@ const server = http.createServer((req, res) => {
 
     const outPath = req.url.replace(/^\/v1/, "/api/v1");
 
+    // Forward all anthropic-* headers (beta flags, etc.) from the client.
+    const fwdHeaders = {
+      "content-type": req.headers["content-type"] || "application/json",
+      "anthropic-version": req.headers["anthropic-version"] || "2023-06-01",
+      "authorization": `Bearer ${OPENROUTER_KEY}`,
+      "content-length": Buffer.byteLength(body),
+      "http-referer": "https://atlaslives.dev",
+      "x-title": "AtlasLives claude-agent",
+    };
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (k.toLowerCase().startsWith("anthropic-") && !fwdHeaders[k]) {
+        fwdHeaders[k] = v;
+      }
+    }
+
+    // Debug: log request to /data/proxy.log so we can inspect what Claude Code sends.
+    try {
+      require("fs").appendFileSync("/data/proxy.log",
+        `\n=== ${new Date().toISOString()} ${req.method} ${req.url} ===\n` +
+        `headers: ${JSON.stringify(req.headers)}\n` +
+        `body: ${body.slice(0, 2000)}\n`);
+    } catch {}
+
     const options = {
       hostname: "openrouter.ai",
       port: 443,
       path: outPath,
       method: req.method,
-      headers: {
-        "content-type": req.headers["content-type"] || "application/json",
-        "anthropic-version": req.headers["anthropic-version"] || "2023-06-01",
-        "authorization": `Bearer ${OPENROUTER_KEY}`,
-        "content-length": Buffer.byteLength(body),
-        "http-referer": "https://atlaslives.dev",
-        "x-title": "AtlasLives claude-agent",
-      },
+      headers: fwdHeaders,
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
+      try {
+        require("fs").appendFileSync("/data/proxy.log",
+          `resp status: ${proxyRes.statusCode}\n`);
+      } catch {}
       // Strip content-length — we may rewrite chunk sizes.
       const headers = { ...proxyRes.headers };
       delete headers["content-length"];

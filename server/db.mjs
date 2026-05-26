@@ -85,6 +85,60 @@ export async function getAgent(id) {
   return data;
 }
 
+export async function deleteWorkspace(id) {
+  const { error } = await db.from("workspaces").delete().eq("id", id);
+  if (error) dbError("deleteWorkspace", error);
+}
+
+export async function getUserProfile(userId) {
+  const { data } = await db.from("user_profiles").select("*").eq("user_id", userId).single();
+  return data ?? null;
+}
+
+export async function upsertUserProfile(userId, fields) {
+  const now = nowIso();
+  const update = { user_id: userId, updated_at: now };
+  if (fields.openrouterKey !== undefined) update.openrouter_key = fields.openrouterKey;
+  if (fields.openrouterKeyHash !== undefined) update.openrouter_key_hash = fields.openrouterKeyHash;
+  const { data, error } = await db.from("user_profiles")
+    .upsert(update, { onConflict: "user_id" })
+    .select().single();
+  if (error) dbError("upsertUserProfile", error);
+  return data;
+}
+
+export async function listUserProfiles() {
+  const { data, error } = await db.from("user_profiles").select("*");
+  if (error) dbError("listUserProfiles", error);
+  return data ?? [];
+}
+
+export async function getUserUptime(userId) {
+  const { data } = await db.from("user_uptime").select("*").eq("user_id", userId).single();
+  return data ?? { uptime_seconds: 0, agent_count: 0 };
+}
+
+export async function listAllUserUptime() {
+  const { data, error } = await db.from("user_uptime").select("*");
+  if (error) dbError("listAllUserUptime", error);
+  return data ?? [];
+}
+
+export async function logMachineEvent(agentId, userId, flyAppName, event) {
+  const { error } = await db.from("machine_events").insert({
+    agent_id: agentId,
+    user_id: userId,
+    fly_app_name: flyAppName,
+    event,
+  });
+  if (error) dbError("logMachineEvent", error);
+}
+
+export async function deleteAgent(id) {
+  const { error } = await db.from("workspace_agents").delete().eq("id", id);
+  if (error) dbError("deleteAgent", error);
+}
+
 export async function updateAgent(id, fields) {
   const columnMap = {
     status: "status",

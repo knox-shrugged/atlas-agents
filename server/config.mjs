@@ -11,13 +11,16 @@ export const config = {
   opencodeRuntimeImage: process.env.FLY_OPENCODE_RUNTIME_IMAGE || "",
   claudeRuntimeImage: process.env.FLY_CLAUDE_RUNTIME_IMAGE || "",
   piRuntimeImage: process.env.FLY_PI_RUNTIME_IMAGE || "",
+  codexRuntimeImage: process.env.FLY_CODEX_RUNTIME_IMAGE || "",
   flyApiHostname: process.env.FLY_API_HOSTNAME || "https://api.machines.dev",
   openrouterApiKey: process.env.OPENROUTER || "",
+  openrouterProvisionerKey: process.env.OPENROUTER_PROVISIONER_KEY || "",
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   vercelToken: process.env.VERCEL_TOKEN || "",
-  supabasePat: process.env.SUPABASE_PAT || ""
+  supabasePat: process.env.SUPABASE_PAT || "",
+  composioApiKey: process.env.COMPOSIO_API_KEY || "",
 };
 
 export function publicConfig() {

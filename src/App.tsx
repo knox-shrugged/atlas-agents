@@ -1,25 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase, type Agent as SbAgent, type Message } from "./supabase";
+import { supabase } from "./supabase";
 import { cn } from "./lib/utils";
 import { Modal } from "./components/ui/modal";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./components/ui/resizable";
 import {
   Bot,
-  MessageSquare,
-  LayoutGrid,
-  DollarSign,
   ChevronRight,
   Terminal,
   RefreshCw,
   PauseCircle,
   PlayCircle,
-  Send,
-  Circle,
   Plus,
   LogOut,
+  Trash2,
+  BarChart2,
+  ShieldCheck,
+  Plug,
+  Unplug,
+  ExternalLink,
+  Search,
 } from "lucide-react";
 
-type NavItem = "agents" | "messages" | "registry" | "costs";
+type NavItem = "agents" | "usage" | "connections" | "admin";
 
 type Workspace = {
   id: string;
@@ -42,12 +45,27 @@ type Agent = {
   last_error: string | null;
 };
 
-type Costs = {
-  openrouter: { label: string; plan: string; usage_daily: number; usage_monthly: number; usage_total: number; limit: number; limit_remaining: number; error?: string };
-  fly: { label: string; plan: string; apps: number; machines_total: number; machines_by_state: Record<string, number>; est_hourly_usd: number; error?: string };
-  vercel: { label: string; plan: string; status: string; monthly_usd: number | null; error?: string };
-  supabase: { label: string; plan: string; status: string; region: string; monthly_usd: number; error?: string };
+
+type OrUsage = { usage: number; limit: number | null; limit_remaining: number | null; is_free_tier: boolean } | null;
+
+type ComposioToolkit = { id: string; name: string; toolkit: string; authScheme: string; isComposioManaged: boolean };
+type ComposioConnection = { id: string; toolkit: string | null; authScheme: string; wordId: string; status: string | null };
+type ComposioSearchResult = { slug: string; name: string; logo: string | null; toolsCount: number; description: string | null; composioManaged: boolean };
+
+type UserUsage = {
+  uptime: { uptime_seconds: number; agent_count: number };
+  openrouter: OrUsage;
 };
+
+type AdminUserRow = {
+  userId: string;
+  email: string | null;
+  isAdmin: boolean;
+  uptime: { uptime_seconds: number; agent_count: number };
+  openrouter: OrUsage;
+};
+
+type AdminUsage = { users: AdminUserRow[] };
 
 const STATUS_DOT: Record<string, string> = {
   running: "bg-emerald-400",
@@ -70,9 +88,9 @@ function StatusBadge({ status }: { status: string }) {
 
 const NAV: { id: NavItem; label: string; icon: React.ElementType }[] = [
   { id: "agents", label: "Agents", icon: Bot },
-  { id: "messages", label: "Messages", icon: MessageSquare },
-  { id: "registry", label: "Registry", icon: LayoutGrid },
-  { id: "costs", label: "Costs", icon: DollarSign },
+  { id: "usage", label: "My Usage", icon: BarChart2 },
+  { id: "connections", label: "Connections", icon: Plug },
+  { id: "admin", label: "Admin", icon: ShieldCheck },
 ];
 
 export default function AuthGate() {
@@ -105,75 +123,137 @@ function App({ session }: { session: Session }) {
   const [loadedAgentIds, setLoadedAgentIds] = useState<Set<string>>(new Set());
   const [workspaceName, setWorkspaceName] = useState("Demo Workspace");
   const [agentName, setAgentName] = useState("Shell Agent");
-  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent">("shell-agent");
+  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent">("shell-agent");
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDeleteAgent, setConfirmDeleteAgent] = useState<Agent | null>(null);
+  const [confirmDeleteWorkspace, setConfirmDeleteWorkspace] = useState<Workspace | null>(null);
+  const [sidebarAgentOpen, setSidebarAgentOpen] = useState(false);
+  const sidebarCreating = useRef(false);
+  const [sidebarWorkspaceOpen, setSidebarWorkspaceOpen] = useState(false);
 
-  const [sbAgents, setSbAgents] = useState<SbAgent[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedRecipient, setSelectedRecipient] = useState<string>("");
-  const [msgPayload, setMsgPayload] = useState("");
-  const [sending, setSending] = useState(false);
-  const [costs, setCosts] = useState<Costs | null>(null);
-  const [costsLoading, setCostsLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [usage, setUsage] = useState<UserUsage | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [adminUsage, setAdminUsage] = useState<AdminUsage | null>(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [connections, setConnections] = useState<ComposioConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectingApp, setConnectingApp] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<ComposioSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => {
     void loadInitialState();
-    void loadSbAgents();
-    void loadMessages();
-
-    const agentSub = supabase
-      .channel("agents")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agents" }, () => void loadSbAgents())
-      .subscribe();
-
-    const msgSub = supabase
-      .channel("messages")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => void loadMessages())
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(agentSub);
-      void supabase.removeChannel(msgSub);
-    };
   }, []);
 
-  async function loadSbAgents() {
-    const { data } = await supabase.from("agents").select("*").order("created_at", { ascending: false });
-    if (data) setSbAgents(data as SbAgent[]);
+  useEffect(() => {
+    if (sidebarCreating.current && busy !== "agent") {
+      sidebarCreating.current = false;
+      setSidebarAgentOpen(false);
+    }
+  }, [busy]);
+
+  async function loadInitialState() {
+    const [healthRes, wsRes, meRes] = await Promise.all([
+      api<{ ok: boolean }>("/api/health"),
+      api<{ workspaces: Workspace[] }>("/api/workspaces"),
+      api<{ isAdmin: boolean }>("/api/me"),
+    ]);
+    void healthRes;
+    setIsAdmin(meRes.isAdmin);
+    setWorkspaces(wsRes.workspaces);
+    if (wsRes.workspaces[0]) await loadWorkspace(wsRes.workspaces[0].id);
   }
 
-  async function loadMessages() {
-    const { data } = await supabase.from("messages").select("*").order("created_at", { ascending: false }).limit(10);
-    if (data) setMessages(data as Message[]);
+  async function deleteWorkspace(ws: Workspace) {
+    await run(`delete-ws-${ws.id}`, async () => {
+      await api(`/api/workspaces/${ws.id}`, { method: "DELETE" });
+      const remaining = workspaces.filter((w) => w.id !== ws.id);
+      setWorkspaces(remaining);
+      setConfirmDeleteWorkspace(null);
+      if (workspace?.id === ws.id) {
+        if (remaining[0]) {
+          await loadWorkspace(remaining[0].id);
+        } else {
+          setWorkspace(null);
+          setAgents([]);
+        }
+      }
+    });
   }
 
-  async function sendMessage() {
-    if (!selectedRecipient || !msgPayload.trim()) return;
-    setSending(true);
+  async function loadUsage() {
+    setUsageLoading(true);
     try {
-      const { error } = await supabase.from("messages").insert({
-        to_agent_id: selectedRecipient,
-        payload: msgPayload.trim(),
-        status: "pending",
-      });
-      if (error) throw error;
-      setMsgPayload("");
+      const data = await api<UserUsage>("/api/usage");
+      setUsage(data);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : String(err));
     } finally {
-      setSending(false);
+      setUsageLoading(false);
     }
   }
 
-  async function loadInitialState() {
-    const [healthRes, wsRes] = await Promise.all([
-      api<{ ok: boolean }>("/api/health"),
-      api<{ workspaces: Workspace[] }>("/api/workspaces"),
-    ]);
-    void healthRes;
-    setWorkspaces(wsRes.workspaces);
-    if (wsRes.workspaces[0]) await loadWorkspace(wsRes.workspaces[0].id);
+  async function loadAdminUsage() {
+    setAdminLoading(true);
+    try {
+      const data = await api<AdminUsage>("/api/admin/usage");
+      setAdminUsage(data);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function loadConnections() {
+    setConnectionsLoading(true);
+    try {
+      const data = await api<{ connections: ComposioConnection[] }>("/api/composio/connections");
+      setConnections(data.connections);
+    } catch {
+      // composio not configured — silently ignore
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }
+
+  async function searchComposio(q: string) {
+    setSearchLoading(true);
+    try {
+      const data = await api<{ toolkits: ComposioSearchResult[] }>(`/api/composio/toolkits?q=${encodeURIComponent(q)}`);
+      setSearchResults(data.toolkits);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  async function connectApp(toolkitSlug: string) {
+    setConnectingApp(toolkitSlug);
+    try {
+      const data = await api<{ redirectUrl: string }>("/api/composio/connections", {
+        method: "POST",
+        body: { toolkitSlug, redirectUrl: window.location.origin },
+      });
+      window.open(data.redirectUrl, "_blank");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConnectingApp(null);
+    }
+  }
+
+  async function disconnectApp(connectionId: string) {
+    try {
+      await api(`/api/composio/connections/${connectionId}`, { method: "DELETE" });
+      setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function loadWorkspace(id: string) {
@@ -202,8 +282,22 @@ function App({ session }: { session: Session }) {
         body: { name: agentName, kind: agentKind },
       });
       setAgents((prev) => [data.agent, ...prev]);
-      setSelectedAgent(data.agent);
+      selectAgent(data.agent);
+      if (!data.agent.terminal_url) void pollAgentUntilReady(data.agent.id);
     });
+  }
+
+  async function pollAgentUntilReady(agentId: string) {
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const data = await api<{ agent: Agent }>(`/api/agents/${agentId}/refresh`, { method: "POST" });
+        replaceAgent(data.agent);
+        if (data.agent.terminal_url) return;
+      } catch {
+        // keep polling
+      }
+    }
   }
 
   async function refreshAgent(agent: Agent) {
@@ -227,20 +321,30 @@ function App({ session }: { session: Session }) {
     });
   }
 
-  async function loadCosts() {
-    setCostsLoading(true);
-    try {
-      const data = await api<Costs>("/api/costs");
-      setCosts(data);
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCostsLoading(false);
-    }
+  async function deleteAgent(agent: Agent) {
+    await run(`delete-${agent.id}`, async () => {
+      await api(`/api/agents/${agent.id}`, { method: "DELETE" });
+      setAgents((prev) => prev.filter((a) => a.id !== agent.id));
+      setSelectedAgent(null);
+      setConfirmDeleteAgent(null);
+    });
   }
 
   useEffect(() => {
-    if (nav === "costs") void loadCosts();
+    if (nav === "usage") void loadUsage();
+    if (nav === "connections") {
+      void loadConnections();
+      void searchComposio(searchQuery);
+    }
+    if (nav === "admin") void loadAdminUsage();
+  }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    function onVisible() {
+      if (!document.hidden && nav === "connections") void loadConnections();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function replaceAgent(agent: Agent) {
@@ -263,17 +367,46 @@ function App({ session }: { session: Session }) {
   function selectAgent(agent: Agent) {
     setLoadedAgentIds((prev) => new Set([...prev, agent.id]));
     setSelectedAgent(agent);
+    setConfirmDeleteAgent(null);
     setNav("agents");
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans">
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 flex flex-col bg-slate-900 text-slate-100 overflow-y-auto">
-        {/* Logo */}
+    <div className="h-screen bg-slate-50 font-sans">
+      <ResizablePanelGroup direction="horizontal" autoSaveId="atlas-sidebar" className="h-full">
+        <ResizablePanel defaultSize={20} minSize={10} maxSize={35}>
+          {/* Sidebar */}
+          <aside className="h-full flex flex-col bg-slate-900 text-slate-100 overflow-y-auto">
+        {/* Logo + workspace switcher */}
         <div className="px-5 py-5 border-b border-slate-800">
-          <p className="text-sm font-semibold tracking-wide text-slate-300 uppercase">AtlasLives</p>
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{workspace?.name ?? "No workspace"}</p>
+          <p className="text-sm font-semibold tracking-wide text-slate-300 uppercase mb-2">AtlasLives</p>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={workspace?.id ?? ""}
+              onChange={(e) => void loadWorkspace(e.target.value)}
+              className="flex-1 min-w-0 truncate text-xs bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            >
+              {!workspace && <option value="">No workspace</option>}
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>{ws.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSidebarWorkspaceOpen(true)}
+              className="flex items-center justify-center h-6 w-6 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors shrink-0"
+              title="New Workspace"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { if (workspace) setConfirmDeleteWorkspace(workspace); }}
+              disabled={!workspace}
+              className="flex items-center justify-center h-6 w-6 rounded-md text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+              title="Delete Workspace"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Nav */}
@@ -290,39 +423,53 @@ function App({ session }: { session: Session }) {
           >
             <Bot className="h-4 w-4 shrink-0" />
             Agents
-            {agents.length > 0 && (
-              <span className="ml-auto text-xs bg-slate-600 text-slate-200 rounded-full px-1.5 py-0.5 leading-none">
-                {agents.length}
+            <div className="ml-auto flex items-center gap-1.5">
+              {agents.length > 0 && (
+                <span className="text-xs bg-slate-600 text-slate-200 rounded-full px-1.5 py-0.5 leading-none">
+                  {agents.length}
+                </span>
+              )}
+              <span
+                role="button"
+                onClick={(e) => { e.stopPropagation(); setSidebarAgentOpen(true); }}
+                className="flex items-center justify-center h-4 w-4 rounded text-slate-400 hover:text-white hover:bg-slate-500 transition-colors"
+                title="New Agent"
+              >
+                <Plus className="h-3 w-3" />
               </span>
-            )}
+            </div>
           </button>
 
           {/* Agent list — always visible when agents exist */}
           {agents.length > 0 && (
             <div className="pb-1 space-y-0.5">
               {agents.map((agent) => (
-                <button
+                <div
                   key={agent.id}
-                  onClick={() => selectAgent(agent)}
                   className={cn(
-                    "w-full flex items-center gap-2 pl-8 pr-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                    "group w-full flex items-center gap-2 pl-8 pr-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer",
                     selectedAgent?.id === agent.id && nav === "agents"
                       ? "bg-slate-600 text-white"
                       : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                   )}
+                  onClick={() => selectAgent(agent)}
                 >
                   <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", STATUS_DOT[agent.status] ?? "bg-slate-400")} />
-                  <span className="truncate">{agent.name}</span>
-                </button>
+                  <span className="truncate flex-1">{agent.name}</span>
+                  <Trash2
+                    className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 text-slate-400 hover:text-red-400 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteAgent(agent); }}
+                  />
+                </div>
               ))}
             </div>
           )}
 
           {/* Other nav items */}
           {([
-            { id: "messages" as NavItem, label: "Messages", icon: MessageSquare },
-            { id: "registry" as NavItem, label: "Registry", icon: LayoutGrid },
-            { id: "costs" as NavItem, label: "Costs", icon: DollarSign },
+            { id: "usage" as NavItem, label: "My Usage", icon: BarChart2 },
+            { id: "connections" as NavItem, label: "Connections", icon: Plug },
+            ...(isAdmin ? [{ id: "admin" as NavItem, label: "Admin", icon: ShieldCheck }] : []),
           ]).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -336,42 +483,9 @@ function App({ session }: { session: Session }) {
             >
               <Icon className="h-4 w-4 shrink-0" />
               {label}
-              {id === "registry" && sbAgents.length > 0 && (
-                <span className="ml-auto text-xs bg-slate-600 text-slate-200 rounded-full px-1.5 py-0.5 leading-none">
-                  {sbAgents.length}
-                </span>
-              )}
-              {id === "messages" && messages.filter((m) => m.status === "processing").length > 0 && (
-                <span className="ml-auto flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-blue-400 opacity-75" />
-                  <span className="h-2 w-2 rounded-full bg-blue-400" />
-                </span>
-              )}
             </button>
           ))}
         </nav>
-
-        {/* Workspace switcher */}
-        <div className="px-3 border-t border-slate-800 pt-3">
-          <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Workspaces</p>
-          <div className="space-y-0.5">
-            {workspaces.map((ws) => (
-              <button
-                key={ws.id}
-                onClick={() => void loadWorkspace(ws.id)}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium truncate transition-colors",
-                  ws.id === workspace?.id
-                    ? "bg-slate-700 text-white"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                )}
-              >
-                <ChevronRight className="h-3 w-3 shrink-0" />
-                <span className="truncate">{ws.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* User / sign-out */}
         <div className="px-3 pb-4 pt-3 border-t border-slate-800 mt-auto">
@@ -388,10 +502,12 @@ function App({ session }: { session: Session }) {
             </button>
           </div>
         </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          </aside>
+        </ResizablePanel>
+        <ResizableHandle className="bg-slate-800 hover:bg-slate-600 transition-colors" />
+        <ResizablePanel defaultSize={80}>
+          {/* Main */}
+          <div className="h-full flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
         <header className="flex items-center gap-3 px-6 h-14 border-b border-slate-200 bg-white shrink-0">
           {nav === "agents" && selectedAgent ? (
@@ -438,6 +554,13 @@ function App({ session }: { session: Session }) {
                     New tab
                   </a>
                 )}
+                <div className="w-px h-4 bg-slate-200" />
+                <IconButton
+                  icon={Trash2}
+                  label="Delete agent"
+                  onClick={() => setConfirmDeleteAgent(selectedAgent)}
+                  disabled={Boolean(busy)}
+                />
               </div>
             </>
           ) : (
@@ -499,7 +622,7 @@ function App({ session }: { session: Session }) {
             title={`Terminal — ${agent.name}`}
             allow="clipboard-read; clipboard-write"
             className={cn(
-              "border-0 w-full",
+              "border-0 w-full min-h-0",
               nav === "agents" && selectedAgent?.id === agent.id ? "flex-1" : "hidden"
             )}
           />
@@ -518,26 +641,156 @@ function App({ session }: { session: Session }) {
           nav === "agents" && selectedAgent ? "hidden" : ""
         )}>
           {nav === "agents" && (
-            <AgentListView agents={agents} workspace={workspace} onSelect={selectAgent} />
+            <AgentListView agents={agents} workspace={workspace} onSelect={selectAgent} onDelete={setConfirmDeleteAgent} />
           )}
-          {nav === "messages" && (
-            <MessagesView
-              sbAgents={sbAgents}
-              messages={messages}
-              selectedRecipient={selectedRecipient}
-              msgPayload={msgPayload}
-              sending={sending}
-              onRecipientChange={setSelectedRecipient}
-              onPayloadChange={setMsgPayload}
-              onSend={sendMessage}
+          {nav === "usage" && (
+            <UsageView usage={usage} loading={usageLoading} onRefresh={loadUsage} />
+          )}
+          {nav === "connections" && (
+            <ConnectionsView
+              connections={connections}
+              connectionsLoading={connectionsLoading}
+              searchQuery={searchQuery}
+              searchResults={searchResults}
+              searchLoading={searchLoading}
+              connectingApp={connectingApp}
+              onSearchChange={(q) => {
+                setSearchQuery(q);
+                if (q.length === 0 || q.length >= 3) void searchComposio(q);
+              }}
+              onConnect={connectApp}
+              onDisconnect={disconnectApp}
+              onRefreshConnections={loadConnections}
             />
           )}
-          {nav === "registry" && <RegistryView agents={sbAgents} />}
-          {nav === "costs" && (
-            <CostsView costs={costs} loading={costsLoading} onRefresh={loadCosts} />
+          {nav === "admin" && (
+            <AdminView usage={adminUsage} loading={adminLoading} onRefresh={loadAdminUsage} />
           )}
         </main>
-      </div>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+      {/* Sidebar new-workspace modal */}
+      <Modal
+        open={sidebarWorkspaceOpen}
+        onOpenChange={setSidebarWorkspaceOpen}
+        title="New Workspace"
+        description="Workspaces group related agents together."
+        dismissable={busy !== "workspace"}
+      >
+        <div className="space-y-4">
+          <Field label="Name">
+            <Input
+              value={workspaceName}
+              onChange={(e) => setWorkspaceName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { createWorkspace(); setSidebarWorkspaceOpen(false); } }}
+              autoFocus
+            />
+          </Field>
+          <Button
+            onClick={() => { createWorkspace(); setSidebarWorkspaceOpen(false); }}
+            disabled={Boolean(busy)}
+            loading={busy === "workspace"}
+          >
+            Create workspace
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Sidebar new-agent modal */}
+      <Modal
+        open={sidebarAgentOpen}
+        onOpenChange={(v) => { if (!sidebarCreating.current) setSidebarAgentOpen(v); }}
+        title="New Agent"
+        description={workspace ? `Adding to "${workspace.name}"` : "Select a workspace first."}
+        dismissable={busy !== "agent"}
+      >
+        <div className="space-y-4">
+          <Field label="Name">
+            <Input value={agentName} onChange={(e) => setAgentName(e.target.value)} autoFocus />
+          </Field>
+          <Field label="Kind">
+            <select
+              value={agentKind}
+              onChange={(e) => setAgentKind(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent")}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="shell-agent">shell-agent — bash</option>
+              <option value="opencode-agent">opencode-agent — Gemini 2.5 Flash</option>
+              <option value="claude-agent">claude-agent — Claude via OpenRouter</option>
+              <option value="pi-agent">pi-agent — pi.dev via OpenRouter</option>
+              <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
+            </select>
+          </Field>
+          {!workspace && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+              Select a workspace before creating an agent.
+            </p>
+          )}
+          {busy === "agent" && (
+            <p className="text-xs text-blue-600 bg-blue-50 rounded-md px-3 py-2">
+              Provisioning Fly Machine — this takes about 30 seconds…
+            </p>
+          )}
+          <Button
+            onClick={() => { sidebarCreating.current = true; createAgent(); }}
+            disabled={!workspace || Boolean(busy)}
+            loading={busy === "agent"}
+          >
+            Create agent
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Delete agent modal */}
+      <Modal
+        open={Boolean(confirmDeleteAgent)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteAgent(null); }}
+        title="Delete agent"
+        description={confirmDeleteAgent ? `"${confirmDeleteAgent.name}" and its Fly machine will be permanently destroyed.` : undefined}
+      >
+        <div className="flex justify-end gap-2 mt-2">
+          <button
+            onClick={() => setConfirmDeleteAgent(null)}
+            disabled={Boolean(busy)}
+            className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => confirmDeleteAgent && void deleteAgent(confirmDeleteAgent)}
+            disabled={Boolean(busy)}
+            className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+          >
+            {busy?.startsWith("delete-") ? "Deleting…" : "Delete agent"}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Delete workspace modal */}
+      <Modal
+        open={Boolean(confirmDeleteWorkspace)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteWorkspace(null); }}
+        title="Delete workspace"
+        description={confirmDeleteWorkspace ? `"${confirmDeleteWorkspace.name}" and all its agents will be permanently destroyed. This cannot be undone.` : undefined}
+      >
+        <div className="flex justify-end gap-2 mt-2">
+          <button
+            onClick={() => setConfirmDeleteWorkspace(null)}
+            disabled={Boolean(busy)}
+            className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => confirmDeleteWorkspace && void deleteWorkspace(confirmDeleteWorkspace)}
+            disabled={Boolean(busy)}
+            className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+          >
+            {busy?.startsWith("delete-ws-") ? "Deleting…" : "Delete workspace"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -548,10 +801,12 @@ function AgentListView({
   agents,
   workspace,
   onSelect,
+  onDelete,
 }: {
   agents: Agent[];
   workspace: Workspace | null;
   onSelect: (a: Agent) => void;
+  onDelete: (a: Agent) => void;
 }) {
   if (agents.length === 0) {
     return (
@@ -565,10 +820,10 @@ function AgentListView({
   return (
     <div className="space-y-3">
       {agents.map((agent) => (
-        <button
+        <div
           key={agent.id}
           onClick={() => onSelect(agent)}
-          className="w-full text-left bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:shadow-sm transition-all"
+          className="cursor-pointer bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:shadow-sm transition-all"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -579,6 +834,13 @@ function AgentListView({
             <div className="flex items-center gap-2 shrink-0">
               <StatusBadge status={agent.status} />
               <Terminal className="h-3.5 w-3.5 text-slate-300" />
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(agent); }}
+                className="p-0.5 rounded text-slate-400 hover:text-red-500 transition-colors"
+                title="Delete agent"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mt-3">
@@ -597,7 +859,7 @@ function AgentListView({
           {agent.last_error && (
             <pre className="text-xs bg-red-50 text-red-600 rounded-md px-3 py-2 overflow-x-auto whitespace-pre-wrap mt-3">{agent.last_error}</pre>
           )}
-        </button>
+        </div>
       ))}
     </div>
   );
@@ -631,11 +893,11 @@ function AgentModalTrigger({
   workspaces: Workspace[];
   workspaceName: string;
   agentName: string;
-  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent";
+  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent";
   busy: string | null;
   onWorkspaceNameChange: (v: string) => void;
   onAgentNameChange: (v: string) => void;
-  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent") => void;
+  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent") => void;
   onCreateWorkspace: () => void;
   onCreateAgent: () => void;
   onSelectWorkspace: (id: string) => void;
@@ -729,7 +991,7 @@ function AgentModalTrigger({
             <Field label="Kind">
               <select
                 value={agentKind}
-                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent")}
+                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent")}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="shell-agent">shell-agent — bash</option>
@@ -758,197 +1020,7 @@ function AgentModalTrigger({
   );
 }
 
-function MessagesView({
-  sbAgents,
-  messages,
-  selectedRecipient,
-  msgPayload,
-  sending,
-  onRecipientChange,
-  onPayloadChange,
-  onSend,
-}: {
-  sbAgents: SbAgent[];
-  messages: Message[];
-  selectedRecipient: string;
-  msgPayload: string;
-  sending: boolean;
-  onRecipientChange: (v: string) => void;
-  onPayloadChange: (v: string) => void;
-  onSend: () => void;
-}) {
-  const recipient = sbAgents.find((a) => a.id === selectedRecipient);
-  return (
-    <div className="space-y-4">
-      {/* Compose */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-700">New Message</h2>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div className="sm:col-span-1">
-            <Field label="Recipient">
-              <select
-                value={selectedRecipient}
-                onChange={(e) => onRecipientChange(e.target.value)}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">— select agent —</option>
-                {sbAgents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.fly_app_name} ({a.kind})
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <div className="sm:col-span-2">
-            <Field label="Payload">
-              <textarea
-                value={msgPayload}
-                onChange={(e) => onPayloadChange(e.target.value)}
-                placeholder={
-                  recipient?.kind === "claude-agent"
-                    ? "Ask Claude something..."
-                    : "Shell command, e.g. echo hello && date"
-                }
-                rows={2}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"
-              />
-            </Field>
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <button
-            disabled={sending || !selectedRecipient || !msgPayload.trim()}
-            onClick={onSend}
-            className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {sending ? "Sending…" : "Send"}
-          </button>
-        </div>
-      </div>
 
-      {/* Message log */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-700">Message History</h2>
-        {messages.length === 0 ? (
-          <EmptyState icon={MessageSquare} title="No messages yet" description="Send a message to an agent above." />
-        ) : (
-          <div className="space-y-3">
-            {messages.map((m) => {
-              const to = sbAgents.find((a) => a.id === m.to_agent_id);
-              return (
-                <div key={m.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="font-medium text-slate-700">→ {to?.fly_app_name ?? m.to_agent_id.slice(0, 8)}</span>
-                    <StatusBadge status={m.status} />
-                    <span className="ml-auto">{new Date(m.created_at).toLocaleTimeString()}</span>
-                  </div>
-                  <pre className="text-xs text-slate-600 whitespace-pre-wrap break-words font-mono">{m.payload}</pre>
-                  {(m.result || m.status === "processing") && (
-                    <pre className="text-xs text-emerald-300 bg-slate-900 rounded-md px-3 py-2 whitespace-pre-wrap break-words font-mono overflow-x-auto">
-                      {m.result ?? ""}
-                      {m.status === "processing" && (
-                        <span style={{ animation: "blink 1s step-end infinite" }}>▋</span>
-                      )}
-                    </pre>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RegistryView({ agents }: { agents: SbAgent[] }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-700">Live Registry</h2>
-        <span className="text-xs text-slate-400">{agents.length} agent{agents.length !== 1 ? "s" : ""}</span>
-      </div>
-      {agents.length === 0 ? (
-        <div className="p-6">
-          <EmptyState icon={LayoutGrid} title="No agents registered" description="Agents appear here when they boot and register with Supabase." />
-        </div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">
-              <th className="px-4 py-3">App</th>
-              <th className="px-4 py-3">Kind</th>
-              <th className="px-4 py-3">Region</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">ID</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {agents.map((a) => (
-              <tr key={a.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-3 font-medium text-slate-800">{a.fly_app_name}</td>
-                <td className="px-4 py-3 text-slate-500">{a.kind}</td>
-                <td className="px-4 py-3 text-slate-500">{a.fly_region ?? "—"}</td>
-                <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-400">{a.id.slice(0, 8)}…</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
-
-function CostsView({ costs, loading, onRefresh }: { costs: Costs | null; loading: boolean; onRefresh: () => void }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-700">Service Costs</h2>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
-          {loading ? "Loading…" : "Refresh"}
-        </button>
-      </div>
-
-      {!costs && !loading && (
-        <EmptyState icon={DollarSign} title="No cost data yet" description="Click Refresh to fetch live cost data from all services." />
-      )}
-
-      {costs && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <CostCard title="OpenRouter" plan={costs.openrouter.plan} error={costs.openrouter.error}>
-            <CostRow label="Today" value={`$${costs.openrouter.usage_daily?.toFixed(4)}`} />
-            <CostRow label="This month" value={`$${costs.openrouter.usage_monthly?.toFixed(4)}`} />
-            <CostRow label="Total" value={`$${costs.openrouter.usage_total?.toFixed(4)}`} />
-            <CostRow label="Limit remaining" value={`$${costs.openrouter.limit_remaining?.toFixed(4)}`} />
-          </CostCard>
-          <CostCard title="Fly.io" plan={costs.fly.plan} error={costs.fly.error}>
-            <CostRow label="Apps" value={String(costs.fly.apps)} />
-            <CostRow label="Total machines" value={String(costs.fly.machines_total)} />
-            <CostRow label="Running now" value={String(costs.fly.machines_by_state?.started ?? 0)} />
-            <CostRow label="Est. cost/hr" value={`$${costs.fly.est_hourly_usd?.toFixed(5)}`} />
-          </CostCard>
-          <CostCard title="Vercel" plan={costs.vercel.plan} error={costs.vercel.error}>
-            <CostRow label="Status" value={costs.vercel.status} />
-            <CostRow label="Monthly" value={costs.vercel.monthly_usd != null ? `$${costs.vercel.monthly_usd.toFixed(2)}` : "—"} />
-          </CostCard>
-          <CostCard title="Supabase" plan={costs.supabase.plan} error={costs.supabase.error}>
-            <CostRow label="Status" value={costs.supabase.status} />
-            <CostRow label="Region" value={costs.supabase.region} />
-            <CostRow label="Monthly" value={`$${costs.supabase.monthly_usd?.toFixed(2)}`} />
-          </CostCard>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
@@ -1038,31 +1110,6 @@ function EmptyState({
   );
 }
 
-function CostCard({
-  title,
-  plan,
-  error,
-  children,
-}: {
-  title: string;
-  plan: string;
-  error?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex items-baseline gap-2 mb-3">
-        <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
-        <span className="text-xs text-slate-400">{plan}</span>
-      </div>
-      {error ? (
-        <p className="text-xs text-red-500">{error}</p>
-      ) : (
-        <div className="space-y-1.5">{children}</div>
-      )}
-    </div>
-  );
-}
 
 function CostRow({ label, value }: { label: string; value: string }) {
   return (
@@ -1071,6 +1118,291 @@ function CostRow({ label, value }: { label: string; value: string }) {
       <span className="font-mono text-slate-700">{value}</span>
     </div>
   );
+}
+
+// ── Usage view ────────────────────────────────────────────────────────────────
+
+function UsageView({ usage, loading, onRefresh }: { usage: UserUsage | null; loading: boolean; onRefresh: () => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-700">My Usage</h2>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+        >
+          <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+      {!usage && !loading && (
+        <EmptyState icon={BarChart2} title="No usage data" description="Click Refresh to load your usage." />
+      )}
+      {usage && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Compute (Fly.io)</h3>
+            <div className="space-y-1.5">
+              <CostRow label="Total uptime" value={formatUptime(usage.uptime.uptime_seconds)} />
+              <CostRow label="Agents created" value={String(usage.uptime.agent_count)} />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">AI (OpenRouter)</h3>
+            {!usage.openrouter ? (
+              <p className="text-xs text-slate-400">No OpenRouter key provisioned yet. Create an agent to get started.</p>
+            ) : (
+              <div className="space-y-1.5">
+                <CostRow label="Spent" value={`$${usage.openrouter.usage.toFixed(4)}`} />
+                {usage.openrouter.limit != null && (
+                  <CostRow label="Limit" value={`$${usage.openrouter.limit.toFixed(2)}`} />
+                )}
+                {usage.openrouter.limit_remaining != null && (
+                  <CostRow label="Remaining" value={`$${usage.openrouter.limit_remaining.toFixed(4)}`} />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Connections view ──────────────────────────────────────────────────────────
+
+function ConnectionsView({
+  connections,
+  connectionsLoading,
+  searchQuery,
+  searchResults,
+  searchLoading,
+  connectingApp,
+  onSearchChange,
+  onConnect,
+  onDisconnect,
+  onRefreshConnections,
+}: {
+  connections: ComposioConnection[];
+  connectionsLoading: boolean;
+  searchQuery: string;
+  searchResults: ComposioSearchResult[];
+  searchLoading: boolean;
+  connectingApp: string | null;
+  onSearchChange: (q: string) => void;
+  onConnect: (toolkitSlug: string) => void;
+  onDisconnect: (connectionId: string) => void;
+  onRefreshConnections: () => void;
+}) {
+  const connectedSlugs = new Set(connections.map((c) => c.toolkit));
+
+  return (
+    <div className="space-y-5">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700">Connections</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Connect apps to make them available in your agents via Composio</p>
+        </div>
+        <button
+          onClick={onRefreshConnections}
+          disabled={connectionsLoading}
+          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors shrink-0"
+        >
+          <RefreshCw className={cn("h-3 w-3", connectionsLoading && "animate-spin")} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Search all Composio integrations…"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {searchLoading && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-slate-600 animate-spin" />
+        )}
+      </div>
+
+      {/* Results grid */}
+      {searchResults.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {searchResults.map((tk) => {
+            const conn = connections.find((c) => c.toolkit === tk.slug);
+            const isConnected = connectedSlugs.has(tk.slug);
+            const isConnecting = connectingApp === tk.slug;
+            return (
+              <div
+                key={tk.slug}
+                className={cn(
+                  "relative flex flex-col rounded-xl border p-4 transition-all",
+                  isConnected ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"
+                )}
+              >
+                {/* Logo + name */}
+                <div className="flex items-center gap-2.5 mb-3">
+                  {tk.logo ? (
+                    <img src={tk.logo} alt={tk.name} className="h-6 w-6 rounded object-contain shrink-0" />
+                  ) : (
+                    <div className="h-6 w-6 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                      <Plug className="h-3 w-3 text-slate-400" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 truncate">{tk.name}</p>
+                    {tk.toolsCount > 0 && (
+                      <p className="text-xs text-slate-400">{tk.toolsCount} tools</p>
+                    )}
+                  </div>
+                  {isConnected && (
+                    <Plug className="h-3 w-3 text-emerald-500 shrink-0 ml-auto" />
+                  )}
+                </div>
+
+                {/* Description */}
+                {tk.description && (
+                  <p className="text-xs text-slate-500 line-clamp-2 mb-3 flex-1">{tk.description}</p>
+                )}
+
+                {/* Action */}
+                {isConnected ? (
+                  <button
+                    onClick={() => conn && onDisconnect(conn.id)}
+                    className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Unplug className="h-3 w-3" />
+                    Disconnect
+                  </button>
+                ) : tk.composioManaged ? (
+                  <button
+                    onClick={() => onConnect(tk.slug)}
+                    disabled={isConnecting}
+                    className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                  >
+                    {isConnecting ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-3 w-3" />
+                    )}
+                    {isConnecting ? "Opening…" : "Connect"}
+                  </button>
+                ) : (
+                  <span className="mt-auto inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-400">
+                    Custom setup
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!searchLoading && searchResults.length === 0 && (
+        searchQuery.length > 0 && searchQuery.length < 3
+          ? <EmptyState icon={Search} title="Keep typing…" description="Enter at least 3 characters to search" />
+          : searchQuery.length >= 3
+            ? <EmptyState icon={Search} title="No results" description={`No integrations found for "${searchQuery}"`} />
+            : <EmptyState icon={Search} title="Search integrations" description="Type above to search 200+ app integrations available via Composio" />
+      )}
+    </div>
+  );
+}
+
+// ── Admin view ────────────────────────────────────────────────────────────────
+
+function AdminView({ usage, loading, onRefresh }: { usage: AdminUsage | null; loading: boolean; onRefresh: () => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-700">All Users</h2>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+        >
+          <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+      {!usage && !loading && (
+        <EmptyState icon={ShieldCheck} title="No data" description="Click Refresh to load user usage." />
+      )}
+      {usage && usage.users.length === 0 && (
+        <EmptyState icon={ShieldCheck} title="No users yet" description="Users appear here once they have created an agent." />
+      )}
+      {usage && usage.users.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">
+                <th className="px-4 py-3">User</th>
+                <th className="px-4 py-3">Agents</th>
+                <th className="px-4 py-3">Uptime</th>
+                <th className="px-4 py-3">OR Spend</th>
+                <th className="px-4 py-3">OR Remaining</th>
+                <th className="px-4 py-3">Role</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {usage.users.map((u) => (
+                <tr key={u.userId} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-800 truncate max-w-[180px]">{u.email ?? "—"}</p>
+                    <p className="font-mono text-xs text-slate-400">{u.userId.slice(0, 8)}…</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{u.uptime.agent_count}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatUptime(u.uptime.uptime_seconds)}</td>
+                  <td className="px-4 py-3 font-mono text-slate-700">
+                    {u.openrouter ? `$${u.openrouter.usage.toFixed(4)}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-slate-700">
+                    {u.openrouter?.limit_remaining != null ? `$${u.openrouter.limit_remaining.toFixed(4)}` : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.isAdmin && (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
+                        admin
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TOOLKIT_NAMES: Record<string, string> = {
+  gmail: "Gmail",
+  github: "GitHub",
+  googlecalendar: "Google Calendar",
+  googledrive: "Google Drive",
+  linear: "Linear",
+  notion: "Notion",
+  slack: "Slack",
+  confluence: "Confluence",
+  jira: "Jira",
+};
+
+function formatToolkitName(slug: string): string {
+  return TOOLKIT_NAMES[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 // ── API helper ────────────────────────────────────────────────────────────────
