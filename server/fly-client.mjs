@@ -114,6 +114,10 @@ export async function provisionGooseAgent(args) {
   return provisionAgent({ ...args, image: config.gooseRuntimeImage, kind: "goose-agent" });
 }
 
+export async function provisionHermesAgent(args) {
+  return provisionAgent({ ...args, image: config.hermesRuntimeImage, kind: "hermes-agent" });
+}
+
 async function provisionAgent({
   appName,
   volumeName,

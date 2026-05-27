@@ -125,7 +125,7 @@ function App({ session }: { session: Session }) {
   const [loadedAgentIds, setLoadedAgentIds] = useState<Set<string>>(new Set());
   const [workspaceName, setWorkspaceName] = useState("Demo Workspace");
   const [agentName, setAgentName] = useState("Shell Agent");
-  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent">("shell-agent");
+  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent">("shell-agent");
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteAgent, setConfirmDeleteAgent] = useState<Agent | null>(null);
@@ -714,7 +714,7 @@ function App({ session }: { session: Session }) {
           <Field label="Kind">
             <select
               value={agentKind}
-              onChange={(e) => setAgentKind(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent")}
+              onChange={(e) => setAgentKind(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent")}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="shell-agent">shell-agent — bash</option>
@@ -724,6 +724,7 @@ function App({ session }: { session: Session }) {
               <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
               <option value="aider-agent">aider-agent — Qwen2.5-Coder via OpenRouter</option>
               <option value="goose-agent">goose-agent — Gemini 2.5 Flash via OpenRouter</option>
+              <option value="hermes-agent">hermes-agent — self-improving agent via OpenRouter</option>
             </select>
           </Field>
           {!workspace && (
@@ -897,11 +898,11 @@ function AgentModalTrigger({
   workspaces: Workspace[];
   workspaceName: string;
   agentName: string;
-  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent";
+  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent";
   busy: string | null;
   onWorkspaceNameChange: (v: string) => void;
   onAgentNameChange: (v: string) => void;
-  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent") => void;
+  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent") => void;
   onCreateWorkspace: () => void;
   onCreateAgent: () => void;
   onSelectWorkspace: (id: string) => void;
@@ -995,7 +996,7 @@ function AgentModalTrigger({
             <Field label="Kind">
               <select
                 value={agentKind}
-                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent")}
+                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent")}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="shell-agent">shell-agent — bash</option>
@@ -1005,6 +1006,7 @@ function AgentModalTrigger({
                 <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
                 <option value="aider-agent">aider-agent — Qwen2.5-Coder via OpenRouter</option>
               <option value="goose-agent">goose-agent — Gemini 2.5 Flash via OpenRouter</option>
+              <option value="hermes-agent">hermes-agent — self-improving agent via OpenRouter</option>
               </select>
             </Field>
             {!workspace && (
