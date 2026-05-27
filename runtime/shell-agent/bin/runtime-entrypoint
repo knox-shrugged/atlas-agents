@@ -4,28 +4,41 @@ set -euo pipefail
 mkdir -p /data/workspace
 cd /data/workspace
 
-# Register in Supabase agent registry; writes /data/agent_id
-AGENT_KIND=shell-agent agent-register
+# AGENT_KIND is set via ENV in each child Dockerfile (e.g. claude-agent, opencode-agent)
+agent-register
 
 AGENT_ID="$(cat /data/agent_id 2>/dev/null || true)"
 
+# Start the OpenRouter proxy if installed — only claude-agent ships this binary
+if command -v openrouter-proxy >/dev/null 2>&1; then
+  ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" node "$(command -v openrouter-proxy)" &
+fi
+
 if ! tmux has-session -t atlas-agent 2>/dev/null; then
-  tmux new-session -d -s atlas-agent \
+  # AGENT_KIND doubles as the startup command name (claude-agent / opencode-agent)
+  tmux new-session -d -s atlas-agent -x 220 -y 50 \
     -e "ATLAS_GITHUB_REPO=${ATLAS_GITHUB_REPO:-}" \
     -e "ATLAS_GITHUB_TOKEN=${ATLAS_GITHUB_TOKEN:-}" \
     -e "ATLAS_GIT_USER_NAME=${ATLAS_GIT_USER_NAME:-}" \
     -e "ATLAS_GIT_USER_EMAIL=${ATLAS_GIT_USER_EMAIL:-}" \
-    "atlas-agent start"
+    -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" \
+    -e "ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}" \
+    -e "OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}" \
+    -e "SUPABASE_URL=${SUPABASE_URL:-}" \
+    -e "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}" \
+    -e "AGENT_ID=${AGENT_ID}" \
+    "${AGENT_KIND} start"
 
-  # Window 1: message-handler in tmux so it survives SSH disconnects and
-  # is preserved across autostop/resume cycles (machine state is frozen, not killed)
+  # Window 1: message-handler survives SSH disconnects and suspend/resume cycles
   if [ -n "$AGENT_ID" ] && [ -n "${SUPABASE_URL:-}" ]; then
     tmux new-window -t atlas-agent -n handler \
       -e "AGENT_ID=${AGENT_ID}" \
       -e "SUPABASE_URL=${SUPABASE_URL}" \
       -e "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}" \
-      -e "AGENT_EXEC=bash" \
+      -e "AGENT_EXEC=${AGENT_EXEC:-bash}" \
       "while true; do message-handler; sleep 5; done"
+    # Return focus to the agent window so ttyd opens there
+    tmux select-window -t atlas-agent:0
   fi
 fi
 

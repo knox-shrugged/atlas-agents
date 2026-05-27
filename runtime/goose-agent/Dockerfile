@@ -7,13 +7,10 @@ RUN curl -fsSL https://github.com/block/goose/releases/download/stable/download_
     | CONFIGURE=false bash \
   && ln -sf /root/.local/bin/goose /usr/local/bin/goose
 
-# Bake default config: OpenRouter + Gemini 2.5 Flash
-# GOOSE_MODEL env var overrides model at runtime
-RUN mkdir -p /root/.config/goose && printf '\
-GOOSE_PROVIDER: openrouter\n\
-GOOSE_MODEL: google/gemini-2.5-flash\n\
-GOOSE_TELEMETRY_ENABLED: false\n\
-' > /root/.config/goose/config.yaml
+# Bake full config: extensions + OpenRouter + Gemini 2.5 Flash + telemetry off
+# Derived from goose's own first-run output on a working machine.
+# Without the extensions block goose exits the session immediately on fresh volumes.
+COPY config/config.yaml /root/.config/goose/config.yaml
 
 ENV AGENT_KIND=goose-agent
 ENV AGENT_EXEC=bash

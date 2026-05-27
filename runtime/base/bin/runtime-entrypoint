@@ -16,7 +16,7 @@ fi
 
 if ! tmux has-session -t atlas-agent 2>/dev/null; then
   # AGENT_KIND doubles as the startup command name (claude-agent / opencode-agent)
-  tmux new-session -d -s atlas-agent \
+  tmux new-session -d -s atlas-agent -x 220 -y 50 \
     -e "ATLAS_GITHUB_REPO=${ATLAS_GITHUB_REPO:-}" \
     -e "ATLAS_GITHUB_TOKEN=${ATLAS_GITHUB_TOKEN:-}" \
     -e "ATLAS_GIT_USER_NAME=${ATLAS_GIT_USER_NAME:-}" \

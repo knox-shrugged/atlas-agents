@@ -33,6 +33,9 @@ COPY bin/agent-lookup /usr/local/bin/agent-lookup
 
 RUN chmod +x /usr/local/bin/atlas-agent /usr/local/bin/agent-register /usr/local/bin/message-handler /usr/local/bin/runtime-entrypoint /usr/local/bin/send-message /usr/local/bin/wait-for-reply /usr/local/bin/agent-lookup
 
+ENV AGENT_KIND=shell-agent
+ENV AGENT_EXEC=bash
+
 EXPOSE 7681
 
 ENTRYPOINT ["/usr/local/bin/runtime-entrypoint"]
