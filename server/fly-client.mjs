@@ -106,6 +106,10 @@ export async function provisionCodexAgent(args) {
   return provisionAgent({ ...args, image: config.codexRuntimeImage, kind: "codex-agent" });
 }
 
+export async function provisionAiderAgent(args) {
+  return provisionAgent({ ...args, image: config.aiderRuntimeImage, kind: "aider-agent" });
+}
+
 async function provisionAgent({
   appName,
   volumeName,
@@ -141,6 +145,11 @@ async function provisionAgent({
       // (http://127.0.0.1:8082) which rewrites model IDs. Don't override it here.
       secrets.push({ key: "ANTHROPIC_API_KEY", value: orKey });
     }
+    if (kind === "codex-agent") {
+      // codex config.toml sets env_key = "OPENAI_API_KEY" and base_url = OpenRouter
+      secrets.push({ key: "OPENAI_API_KEY", value: orKey });
+    }
+    // aider-agent uses OPENROUTER_API_KEY natively — already pushed above
   }
   if (config.supabaseUrl) {
     secrets.push({ key: "SUPABASE_URL", value: config.supabaseUrl });

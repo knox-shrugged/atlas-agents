@@ -20,12 +20,13 @@ import {
   updateAgent,
   upsertUserProfile,
 } from "./db.mjs";
-import { createOpenRouterKey, getKeyUsage } from "./openrouter.mjs";
+import { createOpenRouterKey, getKeyActivity, getKeyUsage } from "./openrouter.mjs";
 import { listAuthConfigs, searchToolkits, ensureAuthConfig, getConnectedAccounts, createConnectionLink, deleteConnectedAccount } from "./composio.mjs";
 import {
   destroyApp,
   getMachine,
   makeAgentFlyNames,
+  provisionAiderAgent,
   provisionClaudeAgent,
   provisionCodexAgent,
   provisionOpenCodeAgent,
@@ -173,8 +174,8 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
   }
 
   const kind = request.body?.kind || "shell-agent";
-  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent"].includes(kind)) {
-    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, or codex-agent." });
+  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent"].includes(kind)) {
+    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, or aider-agent." });
   }
 
   const githubRepo = request.body?.githubRepo || null;
@@ -218,6 +219,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
     kind === "claude-agent" ? provisionClaudeAgent :
     kind === "pi-agent" ? provisionPiAgent :
     kind === "codex-agent" ? provisionCodexAgent :
+    kind === "aider-agent" ? provisionAiderAgent :
     provisionShellAgent;
 
   try {
@@ -359,8 +361,12 @@ app.get("/api/usage", { preHandler: authenticate }, async (request) => {
     getUserUptime(request.userId),
     getUserProfile(request.userId),
   ]);
-  const orUsage = await getKeyUsage(profile?.openrouter_key_hash ?? null);
-  return { uptime, openrouter: orUsage };
+  const hash = profile?.openrouter_key_hash ?? null;
+  const [orUsage, models] = await Promise.all([
+    getKeyUsage(hash),
+    getKeyActivity(hash),
+  ]);
+  return { uptime, openrouter: orUsage, models };
 });
 
 app.get("/api/admin/usage", { preHandler: authenticate }, async (request, reply) => {

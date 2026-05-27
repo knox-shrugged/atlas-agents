@@ -47,6 +47,7 @@ type Agent = {
 
 
 type OrUsage = { usage: number; limit: number | null; limit_remaining: number | null; is_free_tier: boolean } | null;
+type ModelUsageRow = { model: string; requests: number; prompt_tokens: number; completion_tokens: number; cost: number };
 
 type ComposioToolkit = { id: string; name: string; toolkit: string; authScheme: string; isComposioManaged: boolean };
 type ComposioConnection = { id: string; toolkit: string | null; authScheme: string; wordId: string; status: string | null };
@@ -55,6 +56,7 @@ type ComposioSearchResult = { slug: string; name: string; logo: string | null; t
 type UserUsage = {
   uptime: { uptime_seconds: number; agent_count: number };
   openrouter: OrUsage;
+  models: ModelUsageRow[];
 };
 
 type AdminUserRow = {
@@ -123,7 +125,7 @@ function App({ session }: { session: Session }) {
   const [loadedAgentIds, setLoadedAgentIds] = useState<Set<string>>(new Set());
   const [workspaceName, setWorkspaceName] = useState("Demo Workspace");
   const [agentName, setAgentName] = useState("Shell Agent");
-  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent">("shell-agent");
+  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent">("shell-agent");
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteAgent, setConfirmDeleteAgent] = useState<Agent | null>(null);
@@ -712,7 +714,7 @@ function App({ session }: { session: Session }) {
           <Field label="Kind">
             <select
               value={agentKind}
-              onChange={(e) => setAgentKind(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent")}
+              onChange={(e) => setAgentKind(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent")}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="shell-agent">shell-agent — bash</option>
@@ -720,6 +722,7 @@ function App({ session }: { session: Session }) {
               <option value="claude-agent">claude-agent — Claude via OpenRouter</option>
               <option value="pi-agent">pi-agent — pi.dev via OpenRouter</option>
               <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
+              <option value="aider-agent">aider-agent — Qwen2.5-Coder via OpenRouter</option>
             </select>
           </Field>
           {!workspace && (
@@ -893,11 +896,11 @@ function AgentModalTrigger({
   workspaces: Workspace[];
   workspaceName: string;
   agentName: string;
-  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent";
+  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent";
   busy: string | null;
   onWorkspaceNameChange: (v: string) => void;
   onAgentNameChange: (v: string) => void;
-  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent") => void;
+  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent") => void;
   onCreateWorkspace: () => void;
   onCreateAgent: () => void;
   onSelectWorkspace: (id: string) => void;
@@ -991,13 +994,15 @@ function AgentModalTrigger({
             <Field label="Kind">
               <select
                 value={agentKind}
-                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent")}
+                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent")}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="shell-agent">shell-agent — bash</option>
                 <option value="opencode-agent">opencode-agent — Gemini 2.5 Flash</option>
                 <option value="claude-agent">claude-agent — Claude via OpenRouter</option>
                 <option value="pi-agent">pi-agent — pi.dev via OpenRouter</option>
+                <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
+                <option value="aider-agent">aider-agent — Qwen2.5-Coder via OpenRouter</option>
               </select>
             </Field>
             {!workspace && (
@@ -1140,30 +1145,61 @@ function UsageView({ usage, loading, onRefresh }: { usage: UserUsage | null; loa
         <EmptyState icon={BarChart2} title="No usage data" description="Click Refresh to load your usage." />
       )}
       {usage && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Compute (Fly.io)</h3>
-            <div className="space-y-1.5">
-              <CostRow label="Total uptime" value={formatUptime(usage.uptime.uptime_seconds)} />
-              <CostRow label="Agents created" value={String(usage.uptime.agent_count)} />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">Compute (Fly.io)</h3>
+              <div className="space-y-1.5">
+                <CostRow label="Total uptime" value={formatUptime(usage.uptime.uptime_seconds)} />
+                <CostRow label="Agents created" value={String(usage.uptime.agent_count)} />
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">AI (OpenRouter)</h3>
+              {!usage.openrouter ? (
+                <p className="text-xs text-slate-400">No OpenRouter key provisioned yet. Create an agent to get started.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  <CostRow label="Spent" value={`$${usage.openrouter.usage.toFixed(4)}`} />
+                  {usage.openrouter.limit != null && (
+                    <CostRow label="Limit" value={`$${usage.openrouter.limit.toFixed(2)}`} />
+                  )}
+                  {usage.openrouter.limit_remaining != null && (
+                    <CostRow label="Remaining" value={`$${usage.openrouter.limit_remaining.toFixed(4)}`} />
+                  )}
+                </div>
+              )}
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">AI (OpenRouter)</h3>
-            {!usage.openrouter ? (
-              <p className="text-xs text-slate-400">No OpenRouter key provisioned yet. Create an agent to get started.</p>
-            ) : (
-              <div className="space-y-1.5">
-                <CostRow label="Spent" value={`$${usage.openrouter.usage.toFixed(4)}`} />
-                {usage.openrouter.limit != null && (
-                  <CostRow label="Limit" value={`$${usage.openrouter.limit.toFixed(2)}`} />
-                )}
-                {usage.openrouter.limit_remaining != null && (
-                  <CostRow label="Remaining" value={`$${usage.openrouter.limit_remaining.toFixed(4)}`} />
-                )}
+          {usage.models.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">AI Usage by Model <span className="font-normal text-slate-400">(last 30 days)</span></h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="text-left py-1.5 pr-4 font-medium text-slate-500">Model</th>
+                      <th className="text-right py-1.5 pr-4 font-medium text-slate-500">Reqs</th>
+                      <th className="text-right py-1.5 pr-4 font-medium text-slate-500">Input</th>
+                      <th className="text-right py-1.5 pr-4 font-medium text-slate-500">Output</th>
+                      <th className="text-right py-1.5 font-medium text-slate-500">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usage.models.map((m) => (
+                      <tr key={m.model} className="border-b border-slate-50 last:border-0">
+                        <td className="py-1.5 pr-4 font-mono text-slate-700">{m.model}</td>
+                        <td className="py-1.5 pr-4 text-right text-slate-600">{m.requests.toLocaleString()}</td>
+                        <td className="py-1.5 pr-4 text-right text-slate-600">{m.prompt_tokens.toLocaleString()}</td>
+                        <td className="py-1.5 pr-4 text-right text-slate-600">{m.completion_tokens.toLocaleString()}</td>
+                        <td className="py-1.5 text-right text-slate-600">${m.cost.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>

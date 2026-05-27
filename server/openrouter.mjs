@@ -38,3 +38,26 @@ export async function getKeyUsage(hash) {
     is_free_tier: d.is_free_tier ?? false,
   };
 }
+
+// Per-model activity for a sub-key, aggregated across completed UTC days (1-day lag).
+// Each item: { model, requests, prompt_tokens, completion_tokens, cost }
+export async function getKeyActivity(hash) {
+  if (!hash) return [];
+  const res = await fetch(`${BASE}/activity?api_key_hash=${hash}`, {
+    headers: provisionerHeaders(),
+  });
+  if (!res.ok) return [];
+  const rows = (await res.json()).data ?? [];
+
+  const byModel = {};
+  for (const row of rows) {
+    const key = row.model || "unknown";
+    if (!byModel[key]) byModel[key] = { model: key, requests: 0, prompt_tokens: 0, completion_tokens: 0, cost: 0 };
+    byModel[key].requests          += row.requests          ?? 0;
+    byModel[key].prompt_tokens     += row.prompt_tokens     ?? 0;
+    byModel[key].completion_tokens += row.completion_tokens ?? 0;
+    byModel[key].cost              += row.usage             ?? 0;
+  }
+  return Object.values(byModel).sort((a, b) => b.cost - a.cost);
+}
+

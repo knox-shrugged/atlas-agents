@@ -124,6 +124,30 @@ export async function listAllUserUptime() {
   return data ?? [];
 }
 
+export async function getModelUsageForUser(userId) {
+  const { data: workspaces } = await db.from("workspaces").select("id").eq("user_id", userId);
+  if (!workspaces?.length) return [];
+
+  const wsIds = workspaces.map((w) => w.id);
+  const { data: agents } = await db.from("workspace_agents")
+    .select("fly_app_name")
+    .in("workspace_id", wsIds)
+    .not("fly_app_name", "is", null);
+  if (!agents?.length) return [];
+
+  const appNames = [...new Set(agents.map((a) => a.fly_app_name).filter(Boolean))];
+  const { data } = await db.from("model_usage").select("model, tokens_in, tokens_out").in("fly_app_name", appNames);
+  if (!data?.length) return [];
+
+  const byModel = {};
+  for (const row of data) {
+    if (!byModel[row.model]) byModel[row.model] = { model: row.model, tokens_in: 0, tokens_out: 0 };
+    byModel[row.model].tokens_in  += row.tokens_in;
+    byModel[row.model].tokens_out += row.tokens_out;
+  }
+  return Object.values(byModel).sort((a, b) => (b.tokens_in + b.tokens_out) - (a.tokens_in + a.tokens_out));
+}
+
 export async function logMachineEvent(agentId, userId, flyAppName, event) {
   const { error } = await db.from("machine_events").insert({
     agent_id: agentId,

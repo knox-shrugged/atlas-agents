@@ -47,7 +47,7 @@ fs.writeFileSync(p,JSON.stringify(c,null,2));
 "
     fi
 
-    # Wire up Composio MCP server if API key is available
+    # Wire up Composio MCP via Tool Router (SSE endpoint — no local process)
     if [ -n "${COMPOSIO_API_KEY:-}" ]; then
       node -e "
 const fs=require('fs'),os=require('os');
@@ -56,9 +56,8 @@ let c={};
 try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}
 if(!c.mcpServers){c.mcpServers={};}
 c.mcpServers.composio={
-  command:'npx',
-  args:['-y','@composio/mcp@latest','start','--composio-api-key',process.env.COMPOSIO_API_KEY,'--entity-id',process.env.COMPOSIO_ENTITY_ID||'default'],
-  type:'stdio'
+  type:'sse',
+  url:'https://backend.composio.dev/tool_router/'+process.env.COMPOSIO_API_KEY+'/mcp'
 };
 fs.writeFileSync(p,JSON.stringify(c,null,2));
 "

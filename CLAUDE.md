@@ -81,6 +81,7 @@ Replace `provisionClaudeAgent` with `provisionShellAgent` or `provisionOpenCodeA
 | `opencode-agent` | `FLY_OPENCODE_RUNTIME_IMAGE` | OpenCode + Gemini 2.5 Flash via OpenRouter |
 | `claude-agent` | `FLY_CLAUDE_RUNTIME_IMAGE` | Claude Code via local OpenRouter proxy |
 | `pi-agent` | `FLY_PI_RUNTIME_IMAGE` | pi.dev CLI via OpenRouter (Node 22 required) |
+| `aider-agent` | `FLY_AIDER_RUNTIME_IMAGE` | Aider (Python) + Qwen2.5-Coder via OpenRouter; model overridable via `AIDER_MODEL` env |
 
 ## Claude-agent specifics
 

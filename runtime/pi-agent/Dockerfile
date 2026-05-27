@@ -2,6 +2,9 @@ FROM --platform=linux/amd64 registry.fly.io/atlas-base:latest
 
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
+# Install pi-mcp-tools extension for MCP server support
+RUN PI_TELEMETRY=0 PI_SKIP_VERSION_CHECK=1 pi install npm:@zhafron/pi-mcp-tools
+
 # Bake pi settings with OpenRouter as the provider
 RUN mkdir -p /root/.pi/agent && node -e " \
   const fs=require('fs'); \

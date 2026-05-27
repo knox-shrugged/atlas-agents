@@ -21,31 +21,26 @@ case "$command" in
     fi
 
     mkdir -p /data/workspace
-
     cd /data/workspace
-    printf '%s codex-agent start pid=%s workspace=/data/workspace\n' "$(date -Iseconds)" "$$" >> /data/agent.log
+    printf '%s aider-agent start pid=%s workspace=/data/workspace\n' "$(date -Iseconds)" "$$" >> /data/agent.log
 
-    cat <<'BANNER'
-AtlasLives codex-agent
+    MODEL="${AIDER_MODEL:-openrouter/qwen/qwen-2.5-coder-32b-instruct}"
+
+    cat <<BANNER
+AtlasLives aider-agent
 Workspace: /data/workspace
-Model:     openai/o4-mini via OpenRouter
+Model:     $MODEL via OpenRouter
 BANNER
 
-    # Pre-trust /data/workspace so codex doesn't prompt on every fresh volume
-    node -e "
-const fs = require('fs');
-const path = '/root/.codex/config.toml';
-let toml = '';
-try { toml = fs.readFileSync(path, 'utf8'); } catch {}
-if (!toml.includes('[projects.\"/data/workspace\"]')) {
-  fs.writeFileSync(path, toml + '\n[projects.\"/data/workspace\"]\ntrust_level = \"trusted\"\n');
-}
-"
-
-    exec codex
+    # Use --no-git when there's no repo so aider doesn't prompt to create one
+    if git -C /data/workspace rev-parse --git-dir >/dev/null 2>&1; then
+      exec aider --model "$MODEL" --no-check-update
+    else
+      exec aider --model "$MODEL" --no-git --no-check-update
+    fi
     ;;
   *)
-    echo "Unknown codex-agent command: $command" >&2
+    echo "Unknown aider-agent command: $command" >&2
     exit 64
     ;;
 esac

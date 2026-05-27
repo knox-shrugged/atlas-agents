@@ -38,7 +38,7 @@ Model:     openrouter/google/gemini-2.5-flash
 Session data: /data/opencode
 BANNER
 
-    # Wire up Composio MCP server if API key is available
+    # Wire up Composio MCP via Tool Router (SSE endpoint — no local process)
     if [ -n "${COMPOSIO_API_KEY:-}" ]; then
       node -e "
 const fs=require('fs');
@@ -47,8 +47,8 @@ let c={};
 try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch{}
 if(!c.mcp){c.mcp={};}
 c.mcp.composio={
-  type:'local',
-  command:['npx','-y','@composio/mcp@latest','start','--composio-api-key',process.env.COMPOSIO_API_KEY,'--entity-id',process.env.COMPOSIO_ENTITY_ID||'default']
+  type:'remote',
+  url:'https://backend.composio.dev/tool_router/'+process.env.COMPOSIO_API_KEY+'/mcp'
 };
 fs.writeFileSync(p,JSON.stringify(c,null,2));
 "

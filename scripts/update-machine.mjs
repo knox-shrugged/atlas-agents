@@ -51,17 +51,13 @@ async function flyRequest(path, { method = "GET", body } = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-function detectImage(name) {
-  if (name.includes("opencode")) return env.FLY_OPENCODE_RUNTIME_IMAGE;
-  if (name.includes("claude")) return env.FLY_CLAUDE_RUNTIME_IMAGE;
-  return env.FLY_RUNTIME_IMAGE;
-}
-const image = imageArg || detectImage(appName);
-
-if (!image) {
-  console.error("Could not determine image — pass it explicitly or check .env");
-  process.exit(1);
-}
+const KIND_TO_IMAGE = {
+  "claude-agent":   "FLY_CLAUDE_RUNTIME_IMAGE",
+  "opencode-agent": "FLY_OPENCODE_RUNTIME_IMAGE",
+  "pi-agent":       "FLY_PI_RUNTIME_IMAGE",
+  "codex-agent":    "FLY_CODEX_RUNTIME_IMAGE",
+  "shell-agent":    "FLY_RUNTIME_IMAGE",
+};
 
 console.log(`Fetching machines for ${appName}...`);
 const machines = await flyRequest(`/apps/${appName}/machines`);
@@ -71,7 +67,15 @@ if (!machines?.length) {
 }
 
 const machine = machines[0];
-console.log(`Updating machine ${machine.id} → ${image}`);
+const agentKind = machine.config?.env?.AGENT_KIND;
+const image = imageArg || (agentKind && env[KIND_TO_IMAGE[agentKind]]);
+
+if (!image) {
+  console.error(`Could not determine image for AGENT_KIND=${agentKind ?? "unknown"} — pass it explicitly or check .env`);
+  process.exit(1);
+}
+
+console.log(`Updating machine ${machine.id} (${agentKind ?? "unknown"}) → ${image}`);
 
 await flyRequest(`/apps/${appName}/machines/${machine.id}`, {
   method: "POST",

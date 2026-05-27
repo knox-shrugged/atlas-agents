@@ -37,6 +37,23 @@ Workspace: /data/workspace
 Provider:  OpenRouter (google/gemini-2.5-flash)
 BANNER
 
+    # Wire up Composio MCP server if API key is available
+    if [ -n "${COMPOSIO_API_KEY:-}" ]; then
+      node -e "
+const fs = require('fs');
+const path = '/root/.pi/agent/settings.json';
+let c = {};
+try { c = JSON.parse(fs.readFileSync(path, 'utf8')); } catch {}
+if (!c.mcp) c.mcp = {};
+c.mcp.composio = {
+  type: 'remote',
+  url: 'https://backend.composio.dev/tool_router/' + process.env.COMPOSIO_API_KEY + '/mcp',
+  enabled: true
+};
+fs.writeFileSync(path, JSON.stringify(c, null, 2));
+"
+    fi
+
     exec pi --provider openrouter --model google/gemini-2.5-flash
     ;;
   *)
