@@ -56,6 +56,8 @@ const KIND_TO_IMAGE = {
   "opencode-agent": "FLY_OPENCODE_RUNTIME_IMAGE",
   "pi-agent":       "FLY_PI_RUNTIME_IMAGE",
   "codex-agent":    "FLY_CODEX_RUNTIME_IMAGE",
+  "aider-agent":    "FLY_AIDER_RUNTIME_IMAGE",
+  "goose-agent":    "FLY_GOOSE_RUNTIME_IMAGE",
   "shell-agent":    "FLY_RUNTIME_IMAGE",
 };
 

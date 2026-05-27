@@ -27,6 +27,7 @@ import {
   getMachine,
   makeAgentFlyNames,
   provisionAiderAgent,
+  provisionGooseAgent,
   provisionClaudeAgent,
   provisionCodexAgent,
   provisionOpenCodeAgent,
@@ -174,8 +175,8 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
   }
 
   const kind = request.body?.kind || "shell-agent";
-  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent"].includes(kind)) {
-    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, or aider-agent." });
+  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent"].includes(kind)) {
+    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, or goose-agent." });
   }
 
   const githubRepo = request.body?.githubRepo || null;
@@ -220,6 +221,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
     kind === "pi-agent" ? provisionPiAgent :
     kind === "codex-agent" ? provisionCodexAgent :
     kind === "aider-agent" ? provisionAiderAgent :
+    kind === "goose-agent" ? provisionGooseAgent :
     provisionShellAgent;
 
   try {

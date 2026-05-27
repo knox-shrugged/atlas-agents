@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 const [, , appName, kind] = process.argv;
 
-const VALID_KINDS = ["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent"];
+const VALID_KINDS = ["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent"];
 
 if (!appName || !kind || !VALID_KINDS.includes(kind)) {
   console.error(`Usage: node scripts/push-runtime.mjs <app-name> <agent-kind>`);
@@ -86,6 +86,7 @@ const agentCmd = {
   "pi-agent": "pi-agent start",
   "codex-agent": "codex-agent start",
   "aider-agent": "aider-agent start",
+  "goose-agent": "goose-agent start",
 }[kind];
 
 // Restart the tmux session (window 0: agent, window 1: message-handler)

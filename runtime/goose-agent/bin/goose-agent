@@ -21,26 +21,32 @@ case "$command" in
     fi
 
     mkdir -p /data/workspace
-    cd /data/workspace
-    printf '%s aider-agent start pid=%s workspace=/data/workspace\n' "$(date -Iseconds)" "$$" >> /data/agent.log
+    mkdir -p /data/goose
 
-    MODEL="${AIDER_MODEL:-openrouter/qwen/qwen-2.5-coder-32b-instruct}"
+    # Persist goose session data on the volume
+    export XDG_CONFIG_HOME=/data/goose
+
+    # Copy baked config to volume location if not already there
+    if [ ! -f /data/goose/goose/config.yaml ]; then
+      mkdir -p /data/goose/goose
+      cp /root/.config/goose/config.yaml /data/goose/goose/config.yaml
+    fi
+
+    cd /data/workspace
+    printf '%s goose-agent start pid=%s workspace=/data/workspace\n' "$(date -Iseconds)" "$$" >> /data/agent.log
+
+    MODEL="${GOOSE_MODEL:-google/gemini-2.5-flash}"
 
     cat <<BANNER
-AtlasLives aider-agent
+AtlasLives goose-agent
 Workspace: /data/workspace
-Model:     $MODEL via OpenRouter
+Provider:  OpenRouter ($MODEL)
 BANNER
 
-    # Use --no-git when there's no repo so aider doesn't prompt to create one
-    if git -C /data/workspace rev-parse --git-dir >/dev/null 2>&1; then
-      exec aider --model "$MODEL"
-    else
-      exec aider --model "$MODEL" --no-git
-    fi
+    exec goose session
     ;;
   *)
-    echo "Unknown aider-agent command: $command" >&2
+    echo "Unknown goose-agent command: $command" >&2
     exit 64
     ;;
 esac

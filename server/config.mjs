@@ -13,6 +13,7 @@ export const config = {
   piRuntimeImage: process.env.FLY_PI_RUNTIME_IMAGE || "",
   codexRuntimeImage: process.env.FLY_CODEX_RUNTIME_IMAGE || "",
   aiderRuntimeImage: process.env.FLY_AIDER_RUNTIME_IMAGE || "",
+  gooseRuntimeImage: process.env.FLY_GOOSE_RUNTIME_IMAGE || "",
   flyApiHostname: process.env.FLY_API_HOSTNAME || "https://api.machines.dev",
   openrouterApiKey: process.env.OPENROUTER || "",
   openrouterProvisionerKey: process.env.OPENROUTER_PROVISIONER_KEY || "",

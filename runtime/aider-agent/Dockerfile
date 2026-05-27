@@ -15,6 +15,9 @@ RUN mkdir -p /root && printf '\
 model: openrouter/qwen/qwen-2.5-coder-32b-instruct\n\
 dark-mode: true\n\
 git: true\n\
+check-update: false\n\
+show-release-notes: false\n\
+analytics-disable: true\n\
 ' > /root/.aider.conf.yml
 
 # AGENT_KIND drives registration + tmux startup command

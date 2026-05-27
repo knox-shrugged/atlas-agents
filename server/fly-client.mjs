@@ -110,6 +110,10 @@ export async function provisionAiderAgent(args) {
   return provisionAgent({ ...args, image: config.aiderRuntimeImage, kind: "aider-agent" });
 }
 
+export async function provisionGooseAgent(args) {
+  return provisionAgent({ ...args, image: config.gooseRuntimeImage, kind: "goose-agent" });
+}
+
 async function provisionAgent({
   appName,
   volumeName,
