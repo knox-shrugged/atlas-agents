@@ -20,20 +20,27 @@ case "$command" in
       fi
     fi
 
-    mkdir -p /data/workspace /data/hermes
+    mkdir -p /data/workspace
 
-    # Persist hermes config and memory to the volume
-    export HERMES_HOME=/data/hermes
+    # Bake model config if not already set (survives across push-runtime updates)
+    HERMES_CFG=/root/.hermes/config.yaml
+    if [ ! -f "$HERMES_CFG" ] || ! grep -q "^model:" "$HERMES_CFG" 2>/dev/null; then
+      mkdir -p /root/.hermes
+      cat > "$HERMES_CFG" <<'CFG'
+model: google/gemini-2.5-flash
+provider: openrouter
+CFG
+    fi
 
     cd /data/workspace
 
     cat <<BANNER
 AtlasLives hermes-agent
 Workspace: /data/workspace
-Provider:  OpenRouter
+Provider:  OpenRouter / gemini-2.5-flash
 BANNER
 
-    exec hermes
+    exec hermes --provider openrouter -m google/gemini-2.5-flash
     ;;
   *)
     echo "Unknown hermes-agent command: $command" >&2
