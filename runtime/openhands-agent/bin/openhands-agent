@@ -40,8 +40,12 @@ Note:      No Docker sandbox — code runs directly on this machine
 BANNER
 
     # --override-with-envs reads LLM_* env vars at startup (not persisted to config)
+    # TTY_INTERACTIVE/TTY_COMPATIBLE override Rich's terminal detection (needed in tmux)
+    export TERM=xterm-256color
+    export TTY_INTERACTIVE=1
+    export TTY_COMPATIBLE=1
     export LLM_BASE_URL="https://openrouter.ai/api/v1"
-    export LLM_API_KEY="${OPENROUTER_API_KEY:-}"
+    export LLM_API_KEY="${OPENROUTER_API_KEY}"
     export LLM_MODEL="anthropic/claude-sonnet-4-5"
     exec /root/.local/share/uv/tools/openhands/bin/openhands --override-with-envs
     ;;
