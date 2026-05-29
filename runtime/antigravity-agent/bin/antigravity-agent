@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command="${1:-start}"
+
+case "$command" in
+  start)
+    if [ -n "${ATLAS_GIT_USER_NAME:-}" ]; then
+      git config --global user.name "$ATLAS_GIT_USER_NAME"
+    fi
+    if [ -n "${ATLAS_GIT_USER_EMAIL:-}" ]; then
+      git config --global user.email "$ATLAS_GIT_USER_EMAIL"
+    fi
+
+    if [ -n "${ATLAS_GITHUB_REPO:-}" ] && [ ! -d "/data/workspace/.git" ]; then
+      echo "Cloning $ATLAS_GITHUB_REPO..."
+      rm -rf /data/workspace
+      if ! git clone "https://${ATLAS_GITHUB_TOKEN}@github.com/${ATLAS_GITHUB_REPO}.git" /data/workspace 2>&1; then
+        echo "WARNING: clone failed — starting with empty workspace"
+      fi
+    fi
+
+    mkdir -p /data/workspace
+
+    # Persist OAuth token across suspend/resume by symlinking ~/.gemini to the Fly volume
+    mkdir -p /data/.gemini/antigravity-cli
+    if [ ! -L "$HOME/.gemini" ]; then
+      rm -rf "$HOME/.gemini"
+      ln -s /data/.gemini "$HOME/.gemini"
+    fi
+
+    cd /data/workspace
+
+    cat <<BANNER
+AtlasLives antigravity-agent
+Workspace: /data/workspace
+Auth:      Google OAuth (run \`agy auth\` if prompted)
+BANNER
+
+    exec agy
+    ;;
+  *)
+    echo "Unknown antigravity-agent command: $command" >&2
+    exit 64
+    ;;
+esac

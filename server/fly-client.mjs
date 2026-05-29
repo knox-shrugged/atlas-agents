@@ -118,6 +118,18 @@ export async function provisionHermesAgent(args) {
   return provisionAgent({ ...args, image: config.hermesRuntimeImage, kind: "hermes-agent" });
 }
 
+export async function provisionCursorAgent(args) {
+  return provisionAgent({ ...args, image: config.cursorRuntimeImage, kind: "cursor-agent" });
+}
+
+export async function provisionAntigravityAgent(args) {
+  return provisionAgent({ ...args, image: config.antigravityRuntimeImage, kind: "antigravity-agent" });
+}
+
+export async function provisionCopilotAgent(args) {
+  return provisionAgent({ ...args, image: config.copilotRuntimeImage, kind: "copilot-agent", copilotGhToken: config.copilotGhToken });
+}
+
 async function provisionAgent({
   appName,
   volumeName,
@@ -130,6 +142,7 @@ async function provisionAgent({
   gitUserEmail,
   openrouterKey,
   composioEntityId,
+  copilotGhToken,
 }) {
   requireFlyConfig(image);
 
@@ -158,6 +171,7 @@ async function provisionAgent({
       secrets.push({ key: "OPENAI_API_KEY", value: orKey });
     }
     // aider-agent uses OPENROUTER_API_KEY natively — already pushed above
+    // cursor-agent uses CURSOR_LOCAL_AGENT_* set at runtime from OPENROUTER_API_KEY
   }
   if (config.supabaseUrl) {
     secrets.push({ key: "SUPABASE_URL", value: config.supabaseUrl });
@@ -171,6 +185,9 @@ async function provisionAgent({
   }
   if (githubToken) {
     secrets.push({ key: "ATLAS_GITHUB_TOKEN", value: githubToken });
+  }
+  if (copilotGhToken && kind === "copilot-agent") {
+    secrets.push({ key: "GH_TOKEN", value: copilotGhToken });
   }
   if (secrets.length) {
     await flyGraphql({

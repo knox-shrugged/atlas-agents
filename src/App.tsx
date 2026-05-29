@@ -1,4 +1,24 @@
 import { useEffect, useRef, useState } from "react";
+
+const AGENT_KINDS = [
+  { value: "aider-agent",       label: "aider-agent — Qwen2.5-Coder via OpenRouter" },
+  { value: "antigravity-agent", label: "antigravity-agent — Google Antigravity (OAuth)" },
+  { value: "claude-agent",      label: "claude-agent — Claude via OpenRouter" },
+  { value: "codex-agent",       label: "codex-agent — o4-mini via OpenRouter" },
+  { value: "copilot-agent",     label: "copilot-agent — GitHub Copilot (GH_TOKEN)" },
+  { value: "cursor-agent",      label: "cursor-agent — Cursor Agent via OpenRouter" },
+  { value: "goose-agent",       label: "goose-agent — Gemini 2.5 Flash via OpenRouter" },
+  { value: "hermes-agent",      label: "hermes-agent — self-improving agent via OpenRouter" },
+  { value: "opencode-agent",    label: "opencode-agent — Gemini 2.5 Flash" },
+  { value: "pi-agent",          label: "pi-agent — pi.dev via OpenRouter" },
+  { value: "shell-agent",       label: "shell-agent — bash" },
+] as const;
+
+type AgentKind = typeof AGENT_KINDS[number]["value"];
+
+function defaultAgentName(kind: AgentKind): string {
+  return kind.replace(/-agent$/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") + " Agent";
+}
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { cn } from "./lib/utils";
@@ -69,6 +89,15 @@ type AdminUserRow = {
 
 type AdminUsage = { users: AdminUserRow[] };
 
+type FlyMachine = {
+  id: string;
+  appName: string;
+  state: string;
+  region: string;
+  createdAt: string;
+  image: string | null;
+};
+
 const STATUS_DOT: Record<string, string> = {
   running: "bg-emerald-400",
   error: "bg-red-400",
@@ -124,8 +153,8 @@ function App({ session }: { session: Session }) {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [loadedAgentIds, setLoadedAgentIds] = useState<Set<string>>(new Set());
   const [workspaceName, setWorkspaceName] = useState("Demo Workspace");
-  const [agentName, setAgentName] = useState("Shell Agent");
-  const [agentKind, setAgentKind] = useState<"shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent">("shell-agent");
+  const [agentKind, setAgentKind] = useState<AgentKind>("shell-agent");
+  const [agentName, setAgentName] = useState(() => defaultAgentName("shell-agent"));
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteAgent, setConfirmDeleteAgent] = useState<Agent | null>(null);
@@ -139,6 +168,8 @@ function App({ session }: { session: Session }) {
   const [usageLoading, setUsageLoading] = useState(false);
   const [adminUsage, setAdminUsage] = useState<AdminUsage | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [adminMachines, setAdminMachines] = useState<FlyMachine[] | null>(null);
+  const [adminMachinesLoading, setAdminMachinesLoading] = useState(false);
   const [connections, setConnections] = useState<ComposioConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
   const [connectingApp, setConnectingApp] = useState<string | null>(null);
@@ -207,6 +238,18 @@ function App({ session }: { session: Session }) {
       setNotice(err instanceof Error ? err.message : String(err));
     } finally {
       setAdminLoading(false);
+    }
+  }
+
+  async function loadAdminMachines() {
+    setAdminMachinesLoading(true);
+    try {
+      const data = await api<{ machines: FlyMachine[] }>("/api/admin/machines");
+      setAdminMachines(data.machines);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAdminMachinesLoading(false);
     }
   }
 
@@ -338,7 +381,7 @@ function App({ session }: { session: Session }) {
       void loadConnections();
       void searchComposio(searchQuery);
     }
-    if (nav === "admin") void loadAdminUsage();
+    if (nav === "admin") { void loadAdminUsage(); void loadAdminMachines(); }
   }, [nav]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -586,7 +629,7 @@ function App({ session }: { session: Session }) {
                       busy={busy}
                       onWorkspaceNameChange={setWorkspaceName}
                       onAgentNameChange={setAgentName}
-                      onAgentKindChange={setAgentKind}
+                      onAgentKindChange={(k) => { setAgentKind(k); setAgentName(defaultAgentName(k)); }}
                       onCreateWorkspace={createWorkspace}
                       onCreateAgent={createAgent}
                       onSelectWorkspace={loadWorkspace}
@@ -603,7 +646,7 @@ function App({ session }: { session: Session }) {
                       busy={busy}
                       onWorkspaceNameChange={setWorkspaceName}
                       onAgentNameChange={setAgentName}
-                      onAgentKindChange={setAgentKind}
+                      onAgentKindChange={(k) => { setAgentKind(k); setAgentName(defaultAgentName(k)); }}
                       onCreateWorkspace={createWorkspace}
                       onCreateAgent={createAgent}
                       onSelectWorkspace={loadWorkspace}
@@ -666,7 +709,7 @@ function App({ session }: { session: Session }) {
             />
           )}
           {nav === "admin" && (
-            <AdminView usage={adminUsage} loading={adminLoading} onRefresh={loadAdminUsage} />
+            <AdminView usage={adminUsage} loading={adminLoading} onRefresh={loadAdminUsage} machines={adminMachines} machinesLoading={adminMachinesLoading} onRefreshMachines={loadAdminMachines} />
           )}
         </main>
           </div>
@@ -714,17 +757,12 @@ function App({ session }: { session: Session }) {
           <Field label="Kind">
             <select
               value={agentKind}
-              onChange={(e) => setAgentKind(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent")}
+              onChange={(e) => { const k = e.target.value as AgentKind; setAgentKind(k); setAgentName(defaultAgentName(k)); }}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="shell-agent">shell-agent — bash</option>
-              <option value="opencode-agent">opencode-agent — Gemini 2.5 Flash</option>
-              <option value="claude-agent">claude-agent — Claude via OpenRouter</option>
-              <option value="pi-agent">pi-agent — pi.dev via OpenRouter</option>
-              <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
-              <option value="aider-agent">aider-agent — Qwen2.5-Coder via OpenRouter</option>
-              <option value="goose-agent">goose-agent — Gemini 2.5 Flash via OpenRouter</option>
-              <option value="hermes-agent">hermes-agent — self-improving agent via OpenRouter</option>
+              {AGENT_KINDS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </Field>
           {!workspace && (
@@ -898,11 +936,11 @@ function AgentModalTrigger({
   workspaces: Workspace[];
   workspaceName: string;
   agentName: string;
-  agentKind: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent";
+  agentKind: AgentKind;
   busy: string | null;
   onWorkspaceNameChange: (v: string) => void;
   onAgentNameChange: (v: string) => void;
-  onAgentKindChange: (v: "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent") => void;
+  onAgentKindChange: (v: AgentKind) => void;
   onCreateWorkspace: () => void;
   onCreateAgent: () => void;
   onSelectWorkspace: (id: string) => void;
@@ -996,17 +1034,12 @@ function AgentModalTrigger({
             <Field label="Kind">
               <select
                 value={agentKind}
-                onChange={(e) => onAgentKindChange(e.target.value as "shell-agent" | "opencode-agent" | "claude-agent" | "pi-agent" | "codex-agent" | "aider-agent" | "goose-agent" | "hermes-agent")}
+                onChange={(e) => onAgentKindChange(e.target.value as AgentKind)}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="shell-agent">shell-agent — bash</option>
-                <option value="opencode-agent">opencode-agent — Gemini 2.5 Flash</option>
-                <option value="claude-agent">claude-agent — Claude via OpenRouter</option>
-                <option value="pi-agent">pi-agent — pi.dev via OpenRouter</option>
-                <option value="codex-agent">codex-agent — o4-mini via OpenRouter</option>
-                <option value="aider-agent">aider-agent — Qwen2.5-Coder via OpenRouter</option>
-              <option value="goose-agent">goose-agent — Gemini 2.5 Flash via OpenRouter</option>
-              <option value="hermes-agent">hermes-agent — self-improving agent via OpenRouter</option>
+                {AGENT_KINDS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </Field>
             {!workspace && (
@@ -1356,67 +1389,187 @@ function ConnectionsView({
 
 // ── Admin view ────────────────────────────────────────────────────────────────
 
-function AdminView({ usage, loading, onRefresh }: { usage: AdminUsage | null; loading: boolean; onRefresh: () => void }) {
+const FLY_STATE_DOT: Record<string, string> = {
+  started: "bg-emerald-400",
+  suspended: "bg-slate-400",
+  stopping: "bg-yellow-400",
+  stopped: "bg-slate-300",
+  creating: "bg-purple-400",
+  destroying: "bg-red-400",
+};
+
+function AdminView({
+  usage, loading, onRefresh,
+  machines, machinesLoading, onRefreshMachines,
+}: {
+  usage: AdminUsage | null; loading: boolean; onRefresh: () => void;
+  machines: FlyMachine[] | null; machinesLoading: boolean; onRefreshMachines: () => void;
+}) {
+  const [stateFilter, setStateFilter] = useState<string>("all");
+
+  const allStates = machines
+    ? Array.from(new Set(machines.map((m) => m.state))).sort()
+    : [];
+
+  const visibleMachines = machines
+    ? (stateFilter === "all" ? machines : machines.filter((m) => m.state === stateFilter))
+    : null;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-700">All Users</h2>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
-        >
-          <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
-          {loading ? "Loading…" : "Refresh"}
-        </button>
-      </div>
-      {!usage && !loading && (
-        <EmptyState icon={ShieldCheck} title="No data" description="Click Refresh to load user usage." />
-      )}
-      {usage && usage.users.length === 0 && (
-        <EmptyState icon={ShieldCheck} title="No users yet" description="Users appear here once they have created an agent." />
-      )}
-      {usage && usage.users.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">
-                <th className="px-4 py-3">User</th>
-                <th className="px-4 py-3">Agents</th>
-                <th className="px-4 py-3">Uptime</th>
-                <th className="px-4 py-3">OR Spend</th>
-                <th className="px-4 py-3">OR Remaining</th>
-                <th className="px-4 py-3">Role</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {usage.users.map((u) => (
-                <tr key={u.userId} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800 truncate max-w-[180px]">{u.email ?? "—"}</p>
-                    <p className="font-mono text-xs text-slate-400">{u.userId.slice(0, 8)}…</p>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{u.uptime.agent_count}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatUptime(u.uptime.uptime_seconds)}</td>
-                  <td className="px-4 py-3 font-mono text-slate-700">
-                    {u.openrouter ? `$${u.openrouter.usage.toFixed(4)}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-slate-700">
-                    {u.openrouter?.limit_remaining != null ? `$${u.openrouter.limit_remaining.toFixed(4)}` : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {u.isAdmin && (
-                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
-                        admin
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="space-y-8">
+      {/* Fly Machines */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">Fly Machines</h2>
+          <div className="flex items-center gap-2">
+            {machines && allStates.length > 0 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setStateFilter("all")}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    stateFilter === "all"
+                      ? "bg-slate-800 text-white"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  All ({machines.length})
+                </button>
+                {allStates.map((s) => {
+                  const count = machines.filter((m) => m.state === s).length;
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setStateFilter(s)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                        stateFilter === s
+                          ? "bg-slate-800 text-white"
+                          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      <span className={cn("h-1.5 w-1.5 rounded-full", FLY_STATE_DOT[s] ?? "bg-slate-400")} />
+                      {s} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              onClick={onRefreshMachines}
+              disabled={machinesLoading}
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+            >
+              <RefreshCw className={cn("h-3 w-3", machinesLoading && "animate-spin")} />
+              {machinesLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
         </div>
-      )}
+        {!machines && !machinesLoading && (
+          <EmptyState icon={ShieldCheck} title="No data" description="Click Refresh to load Fly machines." />
+        )}
+        {machines && machines.length === 0 && (
+          <EmptyState icon={ShieldCheck} title="No machines" description="No Fly machines found in your organization." />
+        )}
+        {visibleMachines && visibleMachines.length === 0 && machines && machines.length > 0 && (
+          <EmptyState icon={ShieldCheck} title="No machines" description={`No machines with state "${stateFilter}".`} />
+        )}
+        {visibleMachines && visibleMachines.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">
+                  <th className="px-4 py-3">App</th>
+                  <th className="px-4 py-3">Machine ID</th>
+                  <th className="px-4 py-3">State</th>
+                  <th className="px-4 py-3">Region</th>
+                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Image</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {visibleMachines.map((m) => (
+                  <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-slate-800 font-mono text-xs">{m.appName}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{m.id}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200">
+                        <span className={cn("h-1.5 w-1.5 rounded-full", FLY_STATE_DOT[m.state] ?? "bg-slate-400")} />
+                        {m.state}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{m.region}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{new Date(m.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-400 truncate max-w-[200px]" title={m.image ?? ""}>{m.image?.split(":")[0].split("/").at(-1) ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Users */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">All Users</h2>
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+          >
+            <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
+        {!usage && !loading && (
+          <EmptyState icon={ShieldCheck} title="No data" description="Click Refresh to load user usage." />
+        )}
+        {usage && usage.users.length === 0 && (
+          <EmptyState icon={ShieldCheck} title="No users yet" description="Users appear here once they have created an agent." />
+        )}
+        {usage && usage.users.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-400 uppercase tracking-wide">
+                  <th className="px-4 py-3">User</th>
+                  <th className="px-4 py-3">Agents</th>
+                  <th className="px-4 py-3">Uptime</th>
+                  <th className="px-4 py-3">OR Spend</th>
+                  <th className="px-4 py-3">OR Remaining</th>
+                  <th className="px-4 py-3">Role</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {usage.users.map((u) => (
+                  <tr key={u.userId} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-800 truncate max-w-[180px]">{u.email ?? "—"}</p>
+                      <p className="font-mono text-xs text-slate-400">{u.userId.slice(0, 8)}…</p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{u.uptime.agent_count}</td>
+                    <td className="px-4 py-3 text-slate-600">{formatUptime(u.uptime.uptime_seconds)}</td>
+                    <td className="px-4 py-3 font-mono text-slate-700">
+                      {u.openrouter ? `$${u.openrouter.usage.toFixed(4)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-slate-700">
+                      {u.openrouter?.limit_remaining != null ? `$${u.openrouter.limit_remaining.toFixed(4)}` : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.isAdmin && (
+                        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
+                          admin
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

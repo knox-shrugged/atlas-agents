@@ -295,6 +295,37 @@ Security-focused rebuild of the OpenClaw pattern. Uses OAuth-only auth and isola
 
 ---
 
+## Antigravity CLI
+
+**Repo:** https://github.com/google-antigravity/antigravity-cli
+**Stars:** ~694 (created May 2026 — very new)
+**Language:** Unknown (closed source binary, install via curl script)
+**License:** Proprietary (Google ToS)
+
+### What it is
+Google's terminal coding agent — a TUI companion to "Antigravity 2.0", their broader GUI coding product. Shares the same core agent engine as the GUI app, with bidirectional settings sync and session export. Optimized for SSH/remote workflows and keyboard-driven use. Supports multi-step reasoning, multi-file editing, tool calling, and persistent history. Explicitly designed for remote/SSH sessions, which makes it nominally interesting for Fly Machines.
+
+### OpenRouter support
+**No.** Auth is Google Sign-In only — no API key, no `GEMINI_API_KEY`, no `OPENROUTER_API_KEY`, no custom base URL. The product runs entirely through Google's proprietary backend.
+
+### Auth model
+Google OAuth exclusively. In SSH/remote sessions it prints an authorization URL rather than opening a browser — similar to `gh auth login --web`. However, there is an **active critical bug**: *"Linux CLI loses OAuth session persistence (Requires re-login on every new terminal window or reboot)"*. For a Fly Machine that suspends and restarts, this means every wake-up would require interactive re-auth. Effectively the same blocker as Kiro CLI.
+
+### Atlas-agents fit
+**Poor.** Two hard blockers:
+1. No API key path — Google OAuth only, no BYOK.
+2. OAuth session persistence is broken on Linux (open bug as of May 2026) — fatal for suspend/resume Fly Machines.
+
+Even if the session bug is fixed, baking a Google OAuth token into the image (like `~/.claude.json` for claude-agent) would tie the image to a single Google account and would be fragile against token expiry.
+
+### Build effort
+High friction, uncertain outcome. Closed-source binary distributed via install script — no npm/pip package, no Dockerfile upstream. Auth flow is unresolvable without an API key path.
+
+### Verdict
+**Skip.** Same class of problem as Kiro CLI. Revisit if Google adds a `GOOGLE_API_KEY` or `ANTIGRAVITY_API_KEY` bring-your-own-key mode.
+
+---
+
 ## Summary Table
 
 | Agent | Stars | OpenRouter | Auth model | Atlas fit | Effort | Verdict |
@@ -310,3 +341,4 @@ Security-focused rebuild of the OpenClaw pattern. Uses OAuth-only auth and isola
 | **nanobot** | 43k | ✅ Confirmed | Config file | Low priority | Medium | **Maybe** |
 | **memU** | 13.7k | N/A | N/A | Not standalone | N/A | **Skip** |
 | **TrustClaw** | 715 | ✅ Via Composio | OAuth | Poor (gateway) | High | **Skip** |
+| **Antigravity CLI** | 694 | ❌ No | Google OAuth only (broken on Linux) | Poor | High | **Skip** |

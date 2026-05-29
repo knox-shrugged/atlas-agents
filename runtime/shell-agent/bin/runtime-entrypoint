@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
 mkdir -p /data/workspace
 cd /data/workspace
 
@@ -17,6 +20,8 @@ fi
 if ! tmux has-session -t atlas-agent 2>/dev/null; then
   # AGENT_KIND doubles as the startup command name (claude-agent / opencode-agent)
   tmux new-session -d -s atlas-agent -x 220 -y 50 \
+    -e "LANG=C.UTF-8" \
+    -e "LC_ALL=C.UTF-8" \
     -e "ATLAS_GITHUB_REPO=${ATLAS_GITHUB_REPO:-}" \
     -e "ATLAS_GITHUB_TOKEN=${ATLAS_GITHUB_TOKEN:-}" \
     -e "ATLAS_GIT_USER_NAME=${ATLAS_GIT_USER_NAME:-}" \
@@ -32,6 +37,8 @@ if ! tmux has-session -t atlas-agent 2>/dev/null; then
   # Window 1: message-handler survives SSH disconnects and suspend/resume cycles
   if [ -n "$AGENT_ID" ] && [ -n "${SUPABASE_URL:-}" ]; then
     tmux new-window -t atlas-agent -n handler \
+      -e "LANG=C.UTF-8" \
+      -e "LC_ALL=C.UTF-8" \
       -e "AGENT_ID=${AGENT_ID}" \
       -e "SUPABASE_URL=${SUPABASE_URL}" \
       -e "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}" \
@@ -42,4 +49,18 @@ if ! tmux has-session -t atlas-agent 2>/dev/null; then
   fi
 fi
 
-exec ttyd --writable --port 7681 tmux attach-session -t atlas-agent
+TTYD_INDEX=/usr/local/share/ttyd/index.html
+
+# If a merged AtlasNF font exists on the persistent volume, bake it into index.html
+if [ -f "/data/AtlasNF.woff2" ] && [ -f "$TTYD_INDEX" ]; then
+  python3 /data/fix-font.py
+fi
+
+if [ -f "$TTYD_INDEX" ]; then
+  exec ttyd --writable --port 7681 \
+    --index "$TTYD_INDEX" \
+    -t 'fontFamily=AtlasNF, monospace' \
+    tmux attach-session -t atlas-agent
+else
+  exec ttyd --writable --port 7681 tmux attach-session -t atlas-agent
+fi

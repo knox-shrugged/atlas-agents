@@ -27,6 +27,9 @@ import {
   getMachine,
   makeAgentFlyNames,
   provisionAiderAgent,
+  provisionCursorAgent,
+  provisionAntigravityAgent,
+  provisionCopilotAgent,
   provisionGooseAgent,
   provisionHermesAgent,
   provisionClaudeAgent,
@@ -176,8 +179,8 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
   }
 
   const kind = request.body?.kind || "shell-agent";
-  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent"].includes(kind)) {
-    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, goose-agent, or hermes-agent." });
+  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent"].includes(kind)) {
+    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, goose-agent, hermes-agent, cursor-agent, antigravity-agent, or copilot-agent." });
   }
 
   const githubRepo = request.body?.githubRepo || null;
@@ -224,6 +227,9 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
     kind === "aider-agent" ? provisionAiderAgent :
     kind === "goose-agent" ? provisionGooseAgent :
     kind === "hermes-agent" ? provisionHermesAgent :
+    kind === "cursor-agent" ? provisionCursorAgent :
+    kind === "antigravity-agent" ? provisionAntigravityAgent :
+    kind === "copilot-agent" ? provisionCopilotAgent :
     provisionShellAgent;
 
   try {
@@ -400,6 +406,53 @@ app.get("/api/admin/usage", { preHandler: authenticate }, async (request, reply)
   );
 
   return { users: rows };
+});
+
+app.get("/api/admin/machines", { preHandler: authenticate }, async (request, reply) => {
+  const profile = await getUserProfile(request.userId);
+  if (!profile?.is_admin) return reply.code(403).send({ error: "Forbidden." });
+
+  const flyApiToken = config.flyApiToken;
+  if (!flyApiToken) return reply.code(503).send({ error: "Fly API token not configured." });
+
+  const gql = `{
+    organization(slug:"personal") {
+      apps {
+        nodes {
+          name
+          machines {
+            nodes {
+              id
+              state
+              region
+              createdAt
+              config
+            }
+          }
+        }
+      }
+    }
+  }`;
+
+  const r = await fetch("https://api.fly.io/graphql", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${flyApiToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query: gql }),
+  }).then((res) => res.json());
+
+  const apps = r.data?.organization?.apps?.nodes || [];
+  const machines = apps.flatMap((a) =>
+    (a.machines?.nodes || []).map((m) => ({
+      id: m.id,
+      appName: a.name,
+      state: m.state,
+      region: m.region,
+      createdAt: m.createdAt,
+      image: (typeof m.config === "object" ? m.config?.image : null) ?? null,
+    }))
+  );
+
+  return { machines };
 });
 
 app.delete("/api/agents/:agentId", { preHandler: authenticate }, async (request, reply) => {

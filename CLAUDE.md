@@ -82,6 +82,7 @@ Replace `provisionClaudeAgent` with `provisionShellAgent` or `provisionOpenCodeA
 | `claude-agent` | `FLY_CLAUDE_RUNTIME_IMAGE` | Claude Code via local OpenRouter proxy |
 | `pi-agent` | `FLY_PI_RUNTIME_IMAGE` | pi.dev CLI via OpenRouter (Node 22 required) |
 | `aider-agent` | `FLY_AIDER_RUNTIME_IMAGE` | Aider (Python) + Qwen2.5-Coder via OpenRouter; model overridable via `AIDER_MODEL` env |
+| `cursor-agent` | `FLY_CURSOR_RUNTIME_IMAGE` | Cursor Agent CLI; auth via `CURSOR_AUTH_TOKEN` (Cursor account) or `OPENROUTER_API_KEY` (local mode) |
 
 ## Claude-agent specifics
 

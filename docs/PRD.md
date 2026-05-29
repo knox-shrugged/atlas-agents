@@ -80,7 +80,7 @@ The spike validated the core technical bets:
 - Agents never hold raw API keys — keys are injected as Fly secrets at provisioning time
 - OpenRouter proxy on claude-agent translates model IDs before forwarding
 - Per-workspace budget tracking (V1: via OpenRouter usage API)
-- Support for Anthropic, OpenRouter; extensible to other providers
+- **Provider policy:** OpenRouter is the preferred API provider — it gives a single key per user, a unified usage API, and covers most open models. It is not a hard requirement. Agents that support OpenRouter should use it. Agents that have a viable API-key-based alternative (e.g. `GEMINI_API_KEY` for Gemini CLI) are acceptable. Agents that require browser OAuth with no API key path are not supported.
 
 ---
 
