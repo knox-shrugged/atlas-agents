@@ -3,7 +3,27 @@
 Compatibility notes for candidate agents to add to the AtlasLives platform.
 Each entry covers: what it is, OpenRouter support, atlas-agents fit, and build effort.
 
-Existing agents for reference: `shell-agent`, `opencode-agent`, `claude-agent`, `pi-agent`, `codex-agent`, `aider-agent`, `goose-agent`.
+---
+
+## Deployed Agents
+
+All agents currently live on the platform as of May 2026.
+
+| Agent | Kind | Model / Backend | Auth | Notes |
+|---|---|---|---|---|
+| **shell-agent** | `shell-agent` | bash (no LLM) | — | Base runtime; every other agent extends this |
+| **opencode-agent** | `opencode-agent` | Gemini 2.5 Flash via OpenRouter | `OPENROUTER_API_KEY` | TypeScript TUI; upstream opencode-ai/opencode |
+| **claude-agent** | `claude-agent` | Claude (Anthropic) via OpenRouter proxy | `OPENROUTER_API_KEY` + proxy | Local proxy rewrites model IDs; `ANTHROPIC_BASE_URL` points at it |
+| **pi-agent** | `pi-agent` | pi.dev models via OpenRouter | `OPENROUTER_API_KEY` | Node-based TUI; pi.dev CLI |
+| **codex-agent** | `codex-agent` | o4-mini via OpenRouter | `OPENROUTER_API_KEY` (as `OPENAI_API_KEY`) | OpenAI Codex CLI |
+| **aider-agent** | `aider-agent` | Qwen2.5-Coder via OpenRouter | `OPENROUTER_API_KEY` | Python; git-native diff/patch workflow |
+| **goose-agent** | `goose-agent` | Gemini 2.5 Flash via OpenRouter | `OPENROUTER_API_KEY` | Block's Rust-based agent; now Linux Foundation |
+| **hermes-agent** | `hermes-agent` | Gemini 2.5 Flash via OpenRouter | `OPENROUTER_API_KEY` | Meta-agent/orchestrator; self-improving skills |
+| **cursor-agent** | `cursor-agent` | Cursor backend / OpenRouter local mode | `OPENROUTER_API_KEY` | Cursor Agent CLI; closed source |
+| **antigravity-agent** | `antigravity-agent` | Google Antigravity backend | Google OAuth | Token persisted to Fly volume; OAuth on first boot |
+| **copilot-agent** | `copilot-agent` | Claude Sonnet 4.5 via GitHub backend | `GH_TOKEN` PAT | GitHub-native context (issues, PRs); Copilot subscription required |
+| **gemini-agent** | `gemini-agent` | Gemini 2.5 Pro (Google) | Google OAuth | Token persisted to Fly volume; 1000 req/day free |
+| **openhands-agent** | `openhands-agent` | claude-sonnet-4-5 via OpenRouter | `OPENROUTER_API_KEY` | Autonomous multi-step; no Docker sandbox on Fly |
 
 ---
 
@@ -12,7 +32,8 @@ Existing agents for reference: `shell-agent`, `opencode-agent`, `claude-agent`, 
 **Repo:** https://github.com/NousResearch/hermes-agent  
 **Stars:** ~170k  
 **Language:** Python  
-**License:** MIT
+**License:** MIT  
+**Status:** ✅ Deployed as `hermes-agent`
 
 ### What it is
 Self-improving Python agent with a learning loop — creates skills from experience, improves them during use, builds persistent memory across sessions. Has a TUI (`hermes --tui`), CLI chat, scheduled automations, and multi-platform messaging gateways (Telegram, Slack, Discord, WhatsApp). Available on PyPI as `hermes-agent` (v0.14+).
@@ -28,22 +49,8 @@ This makes hermes a **meta-agent / orchestrator** rather than a pure coding tool
 ### OpenRouter support
 Native. `OPENROUTER_API_KEY` is the primary env var. Model switchable via `hermes model` or `config.yaml`. No proxy or translation layer needed.
 
-### Atlas-agents fit
-**Excellent.** Follows the same pattern as every other agent:
-- `pip install hermes-agent` in the Dockerfile (Python + uv needed)
-- `HERMES_HOME=/data` points persistent data to the Fly volume
-- Run `hermes --tui` inside tmux → ttyd wraps it as usual
-- `OPENROUTER_API_KEY` as Fly secret
-
-The upstream Dockerfile uses s6-overlay for multi-service supervision, but that's only needed for the production gateway setup. The CLI runs fine standalone — no s6 required.
-
-**Bonus:** Built-in Telegram/Slack gateway means a hermes-agent machine could be configured as a persistent messaging bot — something no other atlas agent currently supports.
-
-### Build effort
-Low. Same pattern as aider-agent. Add Python 3.11+ + uv to a new `runtime/hermes-agent/` Dockerfile, write a startup script, wire up `provisionHermesAgent()` in `fly-client.mjs`.
-
 ### Verdict
-**Build it.** Best OpenRouter fit of all candidates, most features, active project.
+**Built.** Best OpenRouter fit of all candidates, most features, active project.
 
 ---
 
@@ -65,14 +72,6 @@ Unknown / untested. Uses direct provider SDKs (`@anthropic-ai/sdk`, `openai`, `@
 ### Atlas-agents fit
 **Poor fit for the current ttyd/browser-terminal pattern.** OpenClaw's UX is fundamentally a background server you message via phone — there's no meaningful TUI to put in a browser window.
 
-Three paths exist but none map cleanly to the current platform:
-- **Path A (Fly App):** Deploy using their native `fly.toml` as a Fly App (not Machine). Users configure via web UI, then message it via Telegram/WhatsApp. Requires a new "gateway app" provisioning type in atlas-agents.
-- **Path B (CLI-only):** `npm install -g openclaw` + run `openclaw chat` in ttyd. Loses all gateway/messaging features.
-- **Path C (Gateway + terminal):** Run openclaw gateway as a background service + ttyd sidecar. Complex, requires multi-port provisioning.
-
-### Build effort
-High, and requires platform changes (Fly App vs. Machine, new provisioning type, multi-port exposure).
-
 ### Verdict
 **Skip for now.** Would require significant platform work and doesn't add a coding-agent capability. Revisit if atlas-agents adds a "persistent service" provisioning type alongside browser-terminal agents.
 
@@ -89,17 +88,7 @@ High, and requires platform changes (Fly App vs. Machine, new provisioning type,
 AWS's terminal coding agent. Amazon Q Developer CLI was deprecated and replaced by Kiro CLI. Has a TUI with plan mode and autopilot mode (Shift+Tab to cycle). Uses Claude frontier models routed through Kiro's proprietary backend. Free tier available; no AWS account required — login via GitHub, Google, or AWS Builder ID.
 
 ### OpenRouter support
-**No.** Kiro routes exclusively through its own proprietary backend. No `ANTHROPIC_BASE_URL` override, no bring-your-own-key, no custom endpoints. The issue tracker has open requests asking for an API endpoint, suggesting none exists yet.
-
-### Atlas-agents fit
-**Poor.** Two blockers:
-1. No OpenRouter / no API key — requires Kiro account via browser OAuth.
-2. Closed source — can't patch or inspect it.
-
-Auth requires a browser login flow (OAuth), same problem claude-agent solved by baking `~/.claude.json` into the image. That workaround is fragile and account-specific.
-
-### Build effort
-High friction with uncertain outcome due to closed-source auth flow.
+**No.** Kiro routes exclusively through its own proprietary backend. No `ANTHROPIC_BASE_URL` override, no bring-your-own-key, no custom endpoints.
 
 ### Verdict
 **Skip.** Hard auth dependency with no API key path. Check back if Kiro adds bring-your-own-key support.
@@ -111,40 +100,19 @@ High friction with uncertain outcome due to closed-source auth flow.
 **Repo:** https://github.com/github/copilot-cli  
 **Stars:** ~10.6k  
 **Language:** TypeScript (closed source binary)  
-**npm:** `@github/copilot` (293 MB)
+**npm:** `@github/copilot` (293 MB)  
+**Status:** ✅ Deployed as `copilot-agent`
 
 ### What it is
-GitHub's terminal coding agent. TUI with plan mode and autopilot mode (Shift+Tab). Powered by Claude Sonnet 4.5 by default, with GPT-5 and others available via `/model`. Deeply GitHub-integrated — can access issues, PRs, and repos by natural language. Ships with GitHub's MCP server. LSP support for code intelligence.
+GitHub's terminal coding agent. TUI with plan mode and autopilot mode (Shift+Tab). Powered by Claude Sonnet 4.5 by default. Deeply GitHub-integrated — can access issues, PRs, and repos by natural language. Ships with GitHub's MCP server. LSP support for code intelligence.
 
 ### OpenRouter support
-**Yes, via BYOK (Bring Your Own Key/Model).** Already shipped and working. Set these env vars:
+**Yes, via BYOK.** `COPILOT_PROVIDER_TYPE=openai`, `COPILOT_PROVIDER_BASE_URL=https://openrouter.ai/api/v1`, `COPILOT_PROVIDER_API_KEY=<key>`.
 
-```bash
-export COPILOT_PROVIDER_TYPE=openai
-export COPILOT_PROVIDER_BASE_URL=https://openrouter.ai/api/v1
-export COPILOT_PROVIDER_API_KEY=<OPENROUTER_API_KEY>
-export COPILOT_MODEL=anthropic/claude-sonnet-4-5
-```
-
-OpenRouter's OpenAI-compatible endpoint works as a BYOK provider. Tested by users with Ollama Cloud and Azure OpenAI (same pattern).
-
-**Note:** It is unclear whether a GitHub Copilot subscription is still required when using BYOK mode. May require at minimum a free GitHub Copilot tier (available on GitHub Free, no credit card needed).
-
-### Atlas-agents fit
-**Good.** Key points:
-- PAT auth via `GH_TOKEN` or `GITHUB_TOKEN` env var — no browser OAuth required at runtime.
-- `npm install -g @github/copilot` — base image already has Node 22.
-- TUI works with ttyd.
-- `OPENROUTER_API_KEY` as Fly secret (via `COPILOT_PROVIDER_API_KEY`).
-- `GH_TOKEN` (PAT with "Copilot Requests" permission) as second Fly secret — separate from `ATLAS_GITHUB_TOKEN`.
-
-**Unique upside:** Native GitHub context (issues, PRs, repos) is a genuine differentiator no other atlas agent provides.
-
-### Build effort
-Low-medium. Same Dockerfile pattern as pi-agent (Node-based, npm install). Startup script sets `COPILOT_PROVIDER_*` env vars and runs `copilot`. Two secrets required instead of one.
+**Note:** In practice we use `GH_TOKEN` PAT auth against GitHub's Copilot backend rather than OpenRouter, so Copilot subscription billing applies.
 
 ### Verdict
-**Worth building.** OpenRouter works, auth is clean, GitHub integration is a real differentiator.
+**Built.** Auth is clean via PAT, GitHub integration is a genuine differentiator.
 
 ---
 
@@ -154,27 +122,17 @@ Low-medium. Same Dockerfile pattern as pi-agent (Node-based, npm install). Start
 **Stars:** ~104k  
 **Language:** TypeScript  
 **License:** Apache 2.0  
-**npm:** `@google/gemini-cli`
+**npm:** `@google/gemini-cli`  
+**Status:** ✅ Deployed as `gemini-agent`
 
 ### What it is
-Google's open-source terminal agent. TUI with plan mode and autopilot mode. Access to Gemini 3 models (1M token context window). Built-in tools: Google Search grounding, file operations, shell commands, web fetching. MCP support.
+Google's open-source terminal agent. TUI with plan mode and autopilot mode. Access to Gemini 2.5 Pro models (1M token context window). Built-in tools: Google Search grounding, file operations, shell commands, web fetching. MCP support.
 
 ### OpenRouter support
-**No.** Gemini CLI uses `@google/genai` SDK which speaks the Gemini API wire format (`/v1beta/models/...`). OpenRouter only exposes an OpenAI-compatible endpoint. `GOOGLE_GEMINI_BASE_URL` lets you override the endpoint, but the target must speak Gemini API format — OpenRouter does not.
-
-A LiteLLM proxy could bridge the gap in theory (translate Gemini format → OpenAI format → OpenRouter), but that's unnecessary complexity.
-
-### Native key auth
-`GEMINI_API_KEY` from [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Free tier: 1,000 req/day with Gemini 3 Flash/Pro. No credit card, no Google Cloud project required. Can be set as a Fly secret instead of `OPENROUTER_API_KEY`.
-
-### Atlas-agents fit
-**Good, with a different billing model.** Uses `GEMINI_API_KEY` instead of `OPENROUTER_API_KEY`, but the pattern is identical — one API key as a Fly secret. `npm install -g @google/gemini-cli`, run `gemini` in tmux. No Docker required.
-
-### Build effort
-Low. Essentially the same as opencode-agent (Node-based TUI, one API key). Requires a separate onboarding step for users to get a Google AI Studio key.
+**No.** Uses `@google/genai` SDK (Gemini API wire format). OpenRouter speaks OpenAI format only. Auth via Google OAuth (free: 1000 req/day) or `GEMINI_API_KEY`.
 
 ### Verdict
-**Worth building.** Clean fit, generous free tier, 1M context window is a differentiator. Different ecosystem (Google vs. Anthropic/OpenRouter) broadens the lineup.
+**Built** using Google OAuth. Token persists to Fly volume across suspend/resume. 1M context window is a differentiator.
 
 ---
 
@@ -183,162 +141,193 @@ Low. Essentially the same as opencode-agent (Node-based TUI, one API key). Requi
 **Repo:** https://github.com/all-hands-ai/openhands (main) / https://github.com/OpenHands/OpenHands-CLI (CLI)  
 **Stars:** ~75k (main repo)  
 **Language:** Python (SDK + CLI)  
-**License:** MIT (CLI), Source-available (enterprise features)
+**License:** MIT (CLI), Source-available (enterprise features)  
+**Status:** ✅ Deployed as `openhands-agent`
 
 ### What it is
-Autonomous coding agent platform — the most agentic of all candidates. SWE-bench score: 77.6%. Designed to plan and execute entire engineering tasks with minimal user intervention, not just assist interactively.
-
-Two distinct products:
-- **OpenHands (main repo):** Web GUI + agent server. Requires Docker socket (`/var/run/docker.sock`) for sandboxed code execution. **Not suitable for Fly Machines.**
-- **OpenHands CLI:** Lightweight standalone binary. TUI built with `textual` (Python). Can run on local machine without Docker. This is the atlas-agents candidate.
+Autonomous coding agent platform — the most agentic of all candidates. SWE-bench score: 77.6%. Designed to plan and execute entire engineering tasks with minimal user intervention.
 
 ### OpenRouter support
-**Yes.** Three env vars:
+**Yes.** `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` env vars with `--override-with-envs` flag. Note: `TTY_INTERACTIVE=1 TTY_COMPATIBLE=1` required to override Rich's terminal detection in tmux.
 
-```bash
-export LLM_BASE_URL=https://openrouter.ai/api/v1
-export LLM_API_KEY=$OPENROUTER_API_KEY
-export LLM_MODEL=anthropic/claude-sonnet-4-5
-```
-
-### Atlas-agents fit
-**Good, with a sandboxing caveat.** The CLI runs code in the local process when Docker is unavailable — same as every other agent on the platform. The web GUI version (which requires Docker-in-Docker) does not fit.
-
-Install: `uv tool install openhands --python 3.12` (requires Python 3.12 specifically — needs adding to Dockerfile).  
-Config: `~/.openhands/` → redirect to `/data/.openhands`.  
-TUI: `textual`-based, works with ttyd.
-
-**Sandboxing note:** When Docker is present, OpenHands sandboxes code execution in throwaway containers. Without Docker (Fly Machines), code runs directly on the machine — same as aider, goose, etc. The isolation story is weaker than OpenHands's intended production setup, which is acceptable for this spike.
-
-**Unique value:** Genuinely more autonomous than other agents. Hand it a multi-step task and it plans and executes without constant confirmation. Different character from interactive assistants like aider or pi.
-
-### Build effort
-Low-medium. Python 3.12 required (add to Dockerfile). `uv` install, three env vars, standard startup script. Same pattern as hermes-agent.
+### Sandboxing note
+Without Docker (Fly Machines), code runs directly on the machine — same as aider, goose, etc. Acceptable for spike.
 
 ### Verdict
-**Worth building.** Clean OpenRouter fit, unique autonomous character differentiates it from the rest of the lineup.
+**Built.** Unique autonomous character. Uses `uv tool install openhands --python 3.12` baked into image.
 
 ---
 
 ## Hermes Alternatives — Persistent General-Purpose Agents
 
-These agents occupy the same general-purpose "always-on assistant" space as Hermes. They split into two families: the **"Claw" family** (OpenClaw derivatives/competitors) and the **"bot" family**. All are primarily messaging-gateway agents — accessed via Telegram/WhatsApp/Discord rather than a browser terminal — which puts them in the same category as OpenClaw for atlas-agents purposes.
-
-**Hermes is differentiated** from all of them by having an interactive TUI (`hermes --tui`), a self-improving skills system, and the meta-agent delegation layer. The others are "always-on assistant you message" vs hermes being "agent you actively work with in a terminal."
+These agents occupy the same general-purpose "always-on assistant" space as Hermes. All are primarily messaging-gateway agents — accessed via Telegram/WhatsApp/Discord rather than a browser terminal.
 
 ---
 
 ### ZeroClaw
 
 **Repo:** https://github.com/zeroclaw-labs/zeroclaw  
-**Stars:** ~31.6k  
-**Language:** Rust  
-**License:** MIT / Apache 2.0
+**Stars:** ~31.6k | **Language:** Rust
 
-Single Rust binary (~3.4MB). Talks to ~20 LLM providers (Anthropic, OpenAI, Ollama, and others — OpenRouter confirmed), reaches 30+ messaging channels (Discord, Telegram, Matrix, email, voice, webhooks, CLI), and acts through tools (shell, browser, HTTP, hardware, custom MCP servers). Philosophy: "you own the agent, you own the data, you own the machine."
-
-**Atlas fit:** Same gateway/messaging pattern as OpenClaw. Has a CLI channel but no interactive TUI designed for browser terminal use. **Skip** under the current architecture; revisit if a Fly App provisioning path is added.
+Single Rust binary. Talks to ~20 LLM providers (OpenRouter confirmed), 30+ messaging channels. **Atlas fit:** No interactive TUI. **Skip.**
 
 ---
 
 ### PicoClaw
 
 **Repo:** https://github.com/sipeed/picoclaw  
-**Stars:** ~29k  
-**Language:** Go  
-**License:** MIT
+**Stars:** ~29k | **Language:** Go
 
-Ultra-lightweight Go binary: <10MB RAM, boots in milliseconds, runs on $10 RISC-V hardware. Built by Sipeed (Chinese hardware company) via a self-bootstrapping process (the agent itself drove the migration from Python). Supports x86_64, ARM64, MIPS, RISC-V, LoongArch. Strong WeChat support — positioned for the Chinese market.
-
-**Notable:** Not a fork of OpenClaw or nanobot — built from scratch in Go. Most resource-efficient agent in the space.
-
-**Atlas fit:** Same gateway/messaging pattern. No browser TUI. **Skip** unless targeting embedded/edge deployments.
+Ultra-lightweight Go binary (<10MB RAM). Strong WeChat support; Chinese market positioning. **Atlas fit:** No browser TUI. **Skip.**
 
 ---
 
 ### nanobot
 
 **Repo:** https://github.com/HKUDS/nanobot  
-**Stars:** ~43k  
-**Language:** Python  
-**License:** MIT
+**Stars:** ~43k | **Language:** Python
 
-Lightweight Python agent from Hong Kong University of Data Science. Multi-platform messaging (Telegram, Discord, WhatsApp, WeChat, Matrix, Feishu), terminal bot mode, interactive setup wizard. OpenRouter confirmed in changelog (Claude caching fix shipped March 2026). Python 3.11+, installed via PyPI (`nanobot-ai`).
-
-**Atlas fit:** Python + OpenRouter + terminal bot mode makes this the most atlas-agents-compatible of the hermes alternatives — but it's still primarily a messaging agent, not a coding TUI. Could potentially work in a ttyd terminal via the terminal bot mode. **Low-priority build candidate** if a simple persistent messaging agent is wanted alongside the coding agents.
+OpenRouter confirmed. Has a terminal bot mode. Primarily messaging agent not a coding TUI. **Atlas fit:** Low-priority; revisit if a messaging agent is wanted.
 
 ---
 
 ### memU
 
 **Repo:** https://github.com/NevaMind-AI/memU  
-**Stars:** ~13.7k  
-**Language:** Python  
-**License:** MIT
+**Stars:** ~13.7k | **Language:** Python
 
-Not a standalone agent — a **memory SDK** designed to plug into other agents (OpenClaw, nanobot, etc.). Provides structured, queryable persistent memory with filesystem-style organization and deduplication. Described as "Memory for 24/7 proactive agents."
-
-**Atlas fit:** Not deployable standalone. Relevant if building a custom agent that needs advanced memory; hermes has its own memory system built in.
+Not a standalone agent — a **memory SDK** for other agents. **Atlas fit:** Not deployable standalone. **Skip.**
 
 ---
 
 ### TrustClaw
 
 **Repo:** https://github.com/ComposioHQ/trustclaw  
-**Stars:** ~715  
-**Language:** TypeScript  
-**License:** MIT
+**Stars:** ~715 | **Language:** TypeScript
 
-Security-focused rebuild of the OpenClaw pattern. Uses OAuth-only auth and isolated cloud environments (via Composio) to eliminate the credential exposure risk described in atlas-agents' security risks table. Access to 20,000+ managed tools via Composio. Small community; early-stage.
-
-**Atlas fit:** Poor — same gateway pattern, tiny community. The Composio integration approach is interesting for the `COMPOSIO_API_KEY` security concern documented in CLAUDE.md (moving Composio server off the Fly machine), but TrustClaw itself isn't the solution to that.
+Security-focused OpenClaw rebuild via Composio OAuth. Tiny community, early-stage. **Atlas fit:** Same gateway pattern. **Skip.**
 
 ---
 
 ## Antigravity CLI
 
-**Repo:** https://github.com/google-antigravity/antigravity-cli
-**Stars:** ~694 (created May 2026 — very new)
-**Language:** Unknown (closed source binary, install via curl script)
-**License:** Proprietary (Google ToS)
+**Repo:** https://github.com/google-antigravity/antigravity-cli  
+**Stars:** ~694 (created May 2026)  
+**Language:** Unknown (closed source binary)  
+**License:** Proprietary (Google ToS)  
+**Status:** ✅ Deployed as `antigravity-agent` (built despite Skip verdict)
 
 ### What it is
-Google's terminal coding agent — a TUI companion to "Antigravity 2.0", their broader GUI coding product. Shares the same core agent engine as the GUI app, with bidirectional settings sync and session export. Optimized for SSH/remote workflows and keyboard-driven use. Supports multi-step reasoning, multi-file editing, tool calling, and persistent history. Explicitly designed for remote/SSH sessions, which makes it nominally interesting for Fly Machines.
+Google's terminal coding agent — a TUI companion to "Antigravity 2.0". Optimized for SSH/remote workflows. Explicitly designed for remote/SSH sessions.
 
 ### OpenRouter support
-**No.** Auth is Google Sign-In only — no API key, no `GEMINI_API_KEY`, no `OPENROUTER_API_KEY`, no custom base URL. The product runs entirely through Google's proprietary backend.
+**No.** Google Sign-In only. No API key path.
 
 ### Auth model
-Google OAuth exclusively. In SSH/remote sessions it prints an authorization URL rather than opening a browser — similar to `gh auth login --web`. However, there is an **active critical bug**: *"Linux CLI loses OAuth session persistence (Requires re-login on every new terminal window or reboot)"*. For a Fly Machine that suspends and restarts, this means every wake-up would require interactive re-auth. Effectively the same blocker as Kiro CLI.
+Google OAuth. In container environments, token stored at `~/.gemini/antigravity-cli/` (file-based fallback). We symlink to `/data/.gemini` so token persists across suspend/resume.
 
-### Atlas-agents fit
-**Poor.** Two hard blockers:
-1. No API key path — Google OAuth only, no BYOK.
-2. OAuth session persistence is broken on Linux (open bug as of May 2026) — fatal for suspend/resume Fly Machines.
-
-Even if the session bug is fixed, baking a Google OAuth token into the image (like `~/.claude.json` for claude-agent) would tie the image to a single Google account and would be fragile against token expiry.
-
-### Build effort
-High friction, uncertain outcome. Closed-source binary distributed via install script — no npm/pip package, no Dockerfile upstream. Auth flow is unresolvable without an API key path.
+### Known issues
+Active Linux session persistence bug (re-login required on reboot in some desktop environments). On Fly Machines with file-based token storage this is resolved.
 
 ### Verdict
-**Skip.** Same class of problem as Kiro CLI. Revisit if Google adds a `GOOGLE_API_KEY` or `ANTIGRAVITY_API_KEY` bring-your-own-key mode.
+**Built** (despite Skip verdict) — the container file-based token storage workaround makes it viable. Token persists to Fly volume.
+
+---
+
+## Crush
+
+**Repo:** https://github.com/charmbracelet/crush  
+**Stars:** ~TBD (active May 2026)  
+**Language:** Go  
+**License:** MIT  
+**npm:** `@charmland/crush`
+
+### What it is
+Terminal coding agent from Charm (makers of Bubble Tea, Lip Gloss, Glow). Built in Go with a Bubble Tea TUI. Multi-model support with mid-session model switching. LSP integration for code intelligence across 20+ languages. MCP support via stdio, HTTP, and SSE. Single Go binary under 10MB. Ships with project-local and global JSON config (`~/.config/crush/crush.json`).
+
+Key differentiator: Charm's tooling quality bar is exceptionally high — the TUI is polished far beyond most coding agents. The Charm ecosystem (used in 25k+ apps) ensures the Bubble Tea framework is battle-tested.
+
+### OpenRouter support
+**Yes, confirmed.** Set via config file or env var:
+
+```json
+{
+  "providers": {
+    "openrouter": {
+      "apiKey": "<OPENROUTER_API_KEY>",
+      "baseURL": "https://openrouter.ai/api/v1"
+    }
+  }
+}
+```
+
+There is a dedicated community quickstart guide for Crush + OpenRouter. Known issue: setting only the OpenRouter API key on first run may not initialize the project correctly (GitHub issue #499) — config file approach is more reliable.
+
+### Atlas-agents fit
+**Excellent.** Key points:
+- `npm install -g @charmland/crush` — base image already has Node 22
+- OpenRouter confirmed working via config file
+- Single Go binary, Bubble Tea TUI works with ttyd
+- `~/.config/crush/` → symlink to Fly volume for persistence
+- `OPENROUTER_API_KEY` as Fly secret
+
+### Build effort
+Low. Same pattern as cursor-agent and pi-agent (Node-based install, single binary, one secret). Bake `~/.config/crush/crush.json` with OpenRouter config into the image.
+
+### Verdict
+**Build it.** Clean fit, polished TUI, confirmed OpenRouter support, low effort.
+
+---
+
+## DeepSeek-TUI / CodeWhale
+
+**Repo:** https://github.com/Hmbown/DeepSeek-TUI (may redirect to CodeWhale)  
+**Stars:** ~2.3k (early May 2026, trending)  
+**Language:** Rust (binary distributed via npm)  
+**npm:** `deepseek-tui` (being rebranded to `codewhale`)
+
+### What it is
+Terminal coding agent built around DeepSeek V4's 1M-token context window. Written in Rust, distributed via npm as a binary downloader (no Rust toolchain needed at runtime). Three modes: Plan mode (review before executing), Agent mode (interactive with approval on sensitive actions), YOLO mode (fully autonomous). Can read/edit files, run shell commands, search the web, manage git, connect to MCP servers, and spawn parallel sub-agents.
+
+Key differentiator: DeepSeek V4 pricing is roughly 1/10th of Claude Opus per task, making it the cheapest capable model on OpenRouter. The 1M token context window is genuinely useful for large codebases.
+
+### OpenRouter support
+**Yes.** Switch provider via `/provider openrouter` in-session and `/model <id>` to select the model. Auth via `DEEPSEEK_API_KEY` env var or `~/.deepseek/config.toml`. OpenRouter key can be set as the API key.
+
+### Atlas-agents fit
+**Good, with a rebranding caveat.** Key points:
+- `npm install -g deepseek-tui` — base image already has Node 22
+- Binary downloaded by npm installer — no Rust toolchain needed
+- Auth via `DEEPSEEK_API_KEY` env var (set to OpenRouter key for OpenRouter models)
+- Config at `~/.deepseek/config.toml` → symlink to Fly volume
+
+**Rebranding risk (as of May 2026):** The project is mid-rename from `DeepSeek-TUI` to `CodeWhale`. The npm package `deepseek-tui` is being deprecated in favor of `codewhale`, with `deepseek` CLI aliases kept as shims. Building against `deepseek-tui` now may require an npm package name update in the near future. Watch https://github.com/Hmbown/DeepSeek-TUI/releases for the final rename.
+
+### Build effort
+Low-medium. Same pattern as other npm-installed binary agents. Main risk is the ongoing rebrand making the install path unstable. Recommend waiting until the `codewhale` package stabilizes (or building against a pinned version).
+
+### Verdict
+**Build it — but pin the version.** Strong cost/context differentiator via DeepSeek V4. Wait for the CodeWhale rename to settle or pin `deepseek-tui@<version>` in the Dockerfile to avoid breakage.
 
 ---
 
 ## Summary Table
 
+### Candidates (research entries above)
+
 | Agent | Stars | OpenRouter | Auth model | Atlas fit | Effort | Verdict |
 |---|---|---|---|---|---|---|
-| **Hermes** | 170k | ✅ Native | `OPENROUTER_API_KEY` | Excellent | Low | **Build** |
+| **Hermes** | 170k | ✅ Native | `OPENROUTER_API_KEY` | Excellent | Low | ✅ **Built** |
 | **OpenClaw** | 375k | ❓ Unknown | Direct provider SDKs | Poor (gateway, not TUI) | High | **Skip** |
 | **Kiro CLI** | — | ❌ No | Browser OAuth only | Poor | High | **Skip** |
-| **GitHub Copilot CLI** | 10.6k | ✅ BYOK | `GH_TOKEN` PAT + `OPENROUTER_API_KEY` | Good | Low-med | **Build** |
-| **Gemini CLI** | 104k | ❌ Wrong format | `GEMINI_API_KEY` (free tier) | Good | Low | **Build** |
-| **OpenHands CLI** | 75k | ✅ Native | `OPENROUTER_API_KEY` | Good | Low-med | **Build** |
+| **GitHub Copilot CLI** | 10.6k | ✅ BYOK | `GH_TOKEN` PAT | Good | Low-med | ✅ **Built** |
+| **Gemini CLI** | 104k | ❌ Wrong format | Google OAuth (free tier) | Good | Low | ✅ **Built** |
+| **OpenHands CLI** | 75k | ✅ Native | `OPENROUTER_API_KEY` | Good | Low-med | ✅ **Built** |
 | **ZeroClaw** | 31.6k | ✅ ~20 providers | Config file | Poor (gateway) | High | **Skip** |
 | **PicoClaw** | 29k | ✅ Multiple | Config file | Poor (gateway) | High | **Skip** |
 | **nanobot** | 43k | ✅ Confirmed | Config file | Low priority | Medium | **Maybe** |
 | **memU** | 13.7k | N/A | N/A | Not standalone | N/A | **Skip** |
 | **TrustClaw** | 715 | ✅ Via Composio | OAuth | Poor (gateway) | High | **Skip** |
-| **Antigravity CLI** | 694 | ❌ No | Google OAuth only (broken on Linux) | Poor | High | **Skip** |
+| **Antigravity CLI** | 694 | ❌ No | Google OAuth | Poor (per doc) / Works in practice | High | ✅ **Built** |
+| **Crush** | — | ✅ Confirmed | `OPENROUTER_API_KEY` via config | Excellent | Low | **Build** |
+| **DeepSeek-TUI / CodeWhale** | ~2.3k | ✅ Yes | `DEEPSEEK_API_KEY` (use OR key) | Good | Low-med | **Build (pin version)** |
