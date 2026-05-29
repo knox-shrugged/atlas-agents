@@ -130,6 +130,10 @@ export async function provisionCopilotAgent(args) {
   return provisionAgent({ ...args, image: config.copilotRuntimeImage, kind: "copilot-agent", copilotGhToken: config.copilotGhToken });
 }
 
+export async function provisionGeminiAgent(args) {
+  return provisionAgent({ ...args, image: config.geminiRuntimeImage, kind: "gemini-agent" });
+}
+
 async function provisionAgent({
   appName,
   volumeName,

@@ -19,6 +19,7 @@ export const config = {
   antigravityRuntimeImage: process.env.FLY_ANTIGRAVITY_RUNTIME_IMAGE || "",
   copilotRuntimeImage: process.env.FLY_COPILOT_RUNTIME_IMAGE || "",
   copilotGhToken: process.env.COPILOT_GH_TOKEN || "",
+  geminiRuntimeImage: process.env.FLY_GEMINI_RUNTIME_IMAGE || "",
   flyApiHostname: process.env.FLY_API_HOSTNAME || "https://api.machines.dev",
   openrouterApiKey: process.env.OPENROUTER || "",
   openrouterProvisionerKey: process.env.OPENROUTER_PROVISIONER_KEY || "",

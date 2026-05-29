@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command="${1:-start}"
+
+case "$command" in
+  start)
+    if [ -n "${ATLAS_GIT_USER_NAME:-}" ]; then
+      git config --global user.name "$ATLAS_GIT_USER_NAME"
+    fi
+    if [ -n "${ATLAS_GIT_USER_EMAIL:-}" ]; then
+      git config --global user.email "$ATLAS_GIT_USER_EMAIL"
+    fi
+
+    if [ -n "${ATLAS_GITHUB_REPO:-}" ] && [ ! -d "/data/workspace/.git" ]; then
+      echo "Cloning $ATLAS_GITHUB_REPO..."
+      rm -rf /data/workspace
+      if ! git clone "https://${ATLAS_GITHUB_TOKEN}@github.com/${ATLAS_GITHUB_REPO}.git" /data/workspace 2>&1; then
+        echo "WARNING: clone failed — starting with empty workspace"
+      fi
+    fi
+
+    mkdir -p /data/workspace
+
+    # Persist Gemini auth/settings to the Fly volume across suspend/resume
+    mkdir -p /data/.gemini
+    if [ ! -L "$HOME/.gemini" ]; then
+      # Merge any baked settings into the volume on first boot
+      if [ -f "$HOME/.gemini/settings.json" ] && [ ! -f "/data/.gemini/settings.json" ]; then
+        cp "$HOME/.gemini/settings.json" /data/.gemini/settings.json
+      fi
+      rm -rf "$HOME/.gemini"
+      ln -s /data/.gemini "$HOME/.gemini"
+    fi
+
+    cd /data/workspace
+
+    cat <<BANNER
+AtlasLives gemini-agent
+Workspace: /data/workspace
+Auth:      Google OAuth (sign in on first boot — token persists)
+Model:     Gemini 2.5 Pro (1M context, 1000 req/day free)
+BANNER
+
+    exec gemini
+    ;;
+  *)
+    echo "Unknown gemini-agent command: $command" >&2
+    exit 64
+    ;;
+esac

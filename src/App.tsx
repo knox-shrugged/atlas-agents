@@ -7,6 +7,7 @@ const AGENT_KINDS = [
   { value: "codex-agent",       label: "codex-agent — o4-mini via OpenRouter" },
   { value: "copilot-agent",     label: "copilot-agent — GitHub Copilot (GH_TOKEN)" },
   { value: "cursor-agent",      label: "cursor-agent — Cursor Agent via OpenRouter" },
+  { value: "gemini-agent",      label: "gemini-agent — Gemini 2.5 Pro (OAuth)" },
   { value: "goose-agent",       label: "goose-agent — Gemini 2.5 Flash via OpenRouter" },
   { value: "hermes-agent",      label: "hermes-agent — self-improving agent via OpenRouter" },
   { value: "opencode-agent",    label: "opencode-agent — Gemini 2.5 Flash" },
