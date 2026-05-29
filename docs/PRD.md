@@ -29,7 +29,7 @@ The spike validated the core technical bets:
 | Streaming output is achievable | ✅ message-handler patches result column every 1s while command runs |
 | Agents can discover and message each other | ✅ send-message / wait-for-reply / agent-lookup scripts on all runtimes |
 | Claude Code can act as a coordinator | ✅ coordinator system prompt + shell dispatch working |
-| Multiple agent kinds can coexist | ✅ shell-agent, opencode-agent, claude-agent all provisioned and running |
+| Multiple agent kinds can coexist | ✅ opencode-agent, claude-agent, hermes-agent, openhands-agent and others all provisioned and running |
 
 **Core magic confirmed:** suspend a machine, send it a message, it wakes in ~4 seconds, processes the task, streams the result back. The human never touches the machine.
 
@@ -43,7 +43,7 @@ The spike validated the core technical bets:
 - Workspace state persists indefinitely (Fly Volumes survive suspend/resume)
 
 ### 3.2 Agents
-- Three kinds: `shell-agent` (bash), `opencode-agent` (Gemini via OpenRouter), `claude-agent` (Claude Code via OpenRouter)
+- Many agent kinds available: `opencode-agent`, `claude-agent`, `aider-agent`, `hermes-agent`, `cursor-agent`, `copilot-agent`, `gemini-agent`, `openhands-agent`, `antigravity-agent`, and more
 - Each agent runs in an isolated Fly Machine with a dedicated volume
 - Agents auto-register in the registry on boot
 - Agents auto-suspend when idle (autostop), auto-wake on incoming message

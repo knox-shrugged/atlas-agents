@@ -11,7 +11,6 @@ All agents currently live on the platform as of May 2026.
 
 | Agent | Kind | Model / Backend | Auth | Notes |
 |---|---|---|---|---|
-| **shell-agent** | `shell-agent` | bash (no LLM) | — | Base runtime; every other agent extends this |
 | **opencode-agent** | `opencode-agent` | Gemini 2.5 Flash via OpenRouter | `OPENROUTER_API_KEY` | TypeScript TUI; upstream opencode-ai/opencode |
 | **claude-agent** | `claude-agent` | Claude (Anthropic) via OpenRouter proxy | `OPENROUTER_API_KEY` + proxy | Local proxy rewrites model IDs; `ANTHROPIC_BASE_URL` points at it |
 | **pi-agent** | `pi-agent` | pi.dev models via OpenRouter | `OPENROUTER_API_KEY` | Node-based TUI; pi.dev CLI |

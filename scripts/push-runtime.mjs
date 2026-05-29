@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 const [, , appName, kind] = process.argv;
 
-const VALID_KINDS = ["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent", "gemini-agent", "openhands-agent"];
+const VALID_KINDS = ["opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent", "gemini-agent", "openhands-agent"];
 
 if (!appName || !kind || !VALID_KINDS.includes(kind)) {
   console.error(`Usage: node scripts/push-runtime.mjs <app-name> <agent-kind>`);
@@ -80,7 +80,6 @@ for (const [file, filePath] of files) {
 }
 
 const agentCmd = {
-  "shell-agent": "atlas-agent start",
   "opencode-agent": "opencode-agent start",
   "claude-agent": "claude-agent start",
   "pi-agent": "pi-agent start",

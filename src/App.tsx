@@ -13,7 +13,6 @@ const AGENT_KINDS = [
   { value: "opencode-agent",    label: "opencode-agent — Gemini 2.5 Flash" },
   { value: "openhands-agent",   label: "openhands-agent — autonomous coding agent via OpenRouter" },
   { value: "pi-agent",          label: "pi-agent — pi.dev via OpenRouter" },
-  { value: "shell-agent",       label: "shell-agent — bash" },
 ] as const;
 
 type AgentKind = typeof AGENT_KINDS[number]["value"];
@@ -155,8 +154,8 @@ function App({ session }: { session: Session }) {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [loadedAgentIds, setLoadedAgentIds] = useState<Set<string>>(new Set());
   const [workspaceName, setWorkspaceName] = useState("Demo Workspace");
-  const [agentKind, setAgentKind] = useState<AgentKind>("shell-agent");
-  const [agentName, setAgentName] = useState(() => defaultAgentName("shell-agent"));
+  const [agentKind, setAgentKind] = useState<AgentKind>("aider-agent");
+  const [agentName, setAgentName] = useState(() => defaultAgentName("aider-agent"));
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteAgent, setConfirmDeleteAgent] = useState<Agent | null>(null);

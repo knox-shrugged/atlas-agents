@@ -16,9 +16,9 @@ The stack: Fastify API + Vite/React frontend + Fly Machines + Docker runtime ima
 server/          Fastify API (workspaces, agents, Fly provisioning)
 src/             React frontend (App.tsx)
 runtime/
-  shell-agent/   bash + ttyd runtime
   opencode-agent/ OpenCode (Gemini via OpenRouter) + ttyd
   claude-agent/  Claude Code (via OpenRouter proxy) + ttyd
+  <kind>-agent/  one directory per agent kind
 scripts/         Dev tooling (see Dev workflow below)
 ```
 
@@ -71,18 +71,22 @@ const result = await provisionClaudeAgent({ appName, volumeName, region: config.
 console.log(result);
 EOF
 ```
-Replace `provisionClaudeAgent` with `provisionShellAgent` or `provisionOpenCodeAgent` as needed.
+Replace `provisionClaudeAgent` with `provisionOpenCodeAgent` or another provisioner as needed.
 
 ## Agent kinds
 
 | Kind | Image env var | Notes |
 |------|--------------|-------|
-| `shell-agent` | `FLY_RUNTIME_IMAGE` | bash + ttyd |
 | `opencode-agent` | `FLY_OPENCODE_RUNTIME_IMAGE` | OpenCode + Gemini 2.5 Flash via OpenRouter |
 | `claude-agent` | `FLY_CLAUDE_RUNTIME_IMAGE` | Claude Code via local OpenRouter proxy |
 | `pi-agent` | `FLY_PI_RUNTIME_IMAGE` | pi.dev CLI via OpenRouter (Node 22 required) |
 | `aider-agent` | `FLY_AIDER_RUNTIME_IMAGE` | Aider (Python) + Qwen2.5-Coder via OpenRouter; model overridable via `AIDER_MODEL` env |
 | `cursor-agent` | `FLY_CURSOR_RUNTIME_IMAGE` | Cursor Agent CLI; auth via `CURSOR_AUTH_TOKEN` (Cursor account) or `OPENROUTER_API_KEY` (local mode) |
+| `hermes-agent` | `FLY_HERMES_RUNTIME_IMAGE` | Hermes meta-agent via OpenRouter |
+| `antigravity-agent` | `FLY_ANTIGRAVITY_RUNTIME_IMAGE` | Google Antigravity CLI; Google OAuth on first boot |
+| `copilot-agent` | `FLY_COPILOT_RUNTIME_IMAGE` | GitHub Copilot CLI; `GH_TOKEN` PAT required |
+| `gemini-agent` | `FLY_GEMINI_RUNTIME_IMAGE` | Gemini CLI; Google OAuth on first boot |
+| `openhands-agent` | `FLY_OPENHANDS_RUNTIME_IMAGE` | OpenHands CLI via OpenRouter; autonomous multi-step |
 
 ## Claude-agent specifics
 
@@ -124,7 +128,7 @@ Message queue lives in the `messages` table. On INSERT, a database trigger calls
 `wake-agent` Edge Function, which starts the Fly machine if suspended.
 Each agent runs `message-handler` in the background, polling for pending messages every 5s.
 - `claude-agent`: runs `claude -p "$payload"` (AGENT_EXEC=claude)
-- `shell-agent` / `opencode-agent`: runs `bash -c "$payload"` (AGENT_EXEC=bash)
+- all others: runs `bash -c "$payload"` (AGENT_EXEC=bash)
 
 ### One-time setup (manual — DB connectivity is blocked locally)
 1. Go to https://supabase.com/dashboard/project/nsqpzqyykpeqoyokwutb/sql

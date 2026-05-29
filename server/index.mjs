@@ -38,7 +38,6 @@ import {
   provisionCodexAgent,
   provisionOpenCodeAgent,
   provisionPiAgent,
-  provisionShellAgent,
   startMachine,
   suspendMachine
 } from "./fly-client.mjs";
@@ -180,9 +179,9 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
     return reply.code(404).send({ error: "Workspace not found." });
   }
 
-  const kind = request.body?.kind || "shell-agent";
-  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent", "gemini-agent", "openhands-agent"].includes(kind)) {
-    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, goose-agent, hermes-agent, cursor-agent, antigravity-agent, copilot-agent, gemini-agent, or openhands-agent." });
+  const kind = request.body?.kind;
+  if (!["opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent", "gemini-agent", "openhands-agent"].includes(kind)) {
+    return reply.code(400).send({ error: "kind must be one of: opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, goose-agent, hermes-agent, cursor-agent, antigravity-agent, copilot-agent, gemini-agent, openhands-agent." });
   }
 
   const githubRepo = request.body?.githubRepo || null;
@@ -209,7 +208,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
   let agent = await createAgentRecord({
     id,
     workspaceId: workspace.id,
-    name: cleanName(request.body?.name, "Shell Agent"),
+    name: cleanName(request.body?.name, kind),
     kind,
     status: "creating",
     flyAppName: appName,
@@ -233,8 +232,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
     kind === "antigravity-agent" ? provisionAntigravityAgent :
     kind === "copilot-agent" ? provisionCopilotAgent :
     kind === "gemini-agent" ? provisionGeminiAgent :
-    kind === "openhands-agent" ? provisionOpenHandsAgent :
-    provisionShellAgent;
+    provisionOpenHandsAgent;
 
   try {
     const provisioned = await provision({
