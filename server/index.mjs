@@ -31,6 +31,7 @@ import {
   provisionAntigravityAgent,
   provisionCopilotAgent,
   provisionGeminiAgent,
+  provisionOpenHandsAgent,
   provisionGooseAgent,
   provisionHermesAgent,
   provisionClaudeAgent,
@@ -180,8 +181,8 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
   }
 
   const kind = request.body?.kind || "shell-agent";
-  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent", "gemini-agent"].includes(kind)) {
-    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, goose-agent, hermes-agent, cursor-agent, antigravity-agent, copilot-agent, or gemini-agent." });
+  if (!["shell-agent", "opencode-agent", "claude-agent", "pi-agent", "codex-agent", "aider-agent", "goose-agent", "hermes-agent", "cursor-agent", "antigravity-agent", "copilot-agent", "gemini-agent", "openhands-agent"].includes(kind)) {
+    return reply.code(400).send({ error: "kind must be shell-agent, opencode-agent, claude-agent, pi-agent, codex-agent, aider-agent, goose-agent, hermes-agent, cursor-agent, antigravity-agent, copilot-agent, gemini-agent, or openhands-agent." });
   }
 
   const githubRepo = request.body?.githubRepo || null;
@@ -232,6 +233,7 @@ app.post("/api/workspaces/:workspaceId/agents", { preHandler: authenticate }, as
     kind === "antigravity-agent" ? provisionAntigravityAgent :
     kind === "copilot-agent" ? provisionCopilotAgent :
     kind === "gemini-agent" ? provisionGeminiAgent :
+    kind === "openhands-agent" ? provisionOpenHandsAgent :
     provisionShellAgent;
 
   try {

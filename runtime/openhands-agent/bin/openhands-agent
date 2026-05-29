@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command="${1:-start}"
+
+case "$command" in
+  start)
+    if [ -n "${ATLAS_GIT_USER_NAME:-}" ]; then
+      git config --global user.name "$ATLAS_GIT_USER_NAME"
+    fi
+    if [ -n "${ATLAS_GIT_USER_EMAIL:-}" ]; then
+      git config --global user.email "$ATLAS_GIT_USER_EMAIL"
+    fi
+
+    if [ -n "${ATLAS_GITHUB_REPO:-}" ] && [ ! -d "/data/workspace/.git" ]; then
+      echo "Cloning $ATLAS_GITHUB_REPO..."
+      rm -rf /data/workspace
+      if ! git clone "https://${ATLAS_GITHUB_TOKEN}@github.com/${ATLAS_GITHUB_REPO}.git" /data/workspace 2>&1; then
+        echo "WARNING: clone failed — starting with empty workspace"
+      fi
+    fi
+
+    mkdir -p /data/workspace
+
+    # Persist OpenHands config/state to Fly volume across suspend/resume
+    mkdir -p /data/.openhands
+    if [ ! -L "$HOME/.openhands" ]; then
+      rm -rf "$HOME/.openhands"
+      ln -s /data/.openhands "$HOME/.openhands"
+    fi
+
+    cd /data/workspace
+
+    cat <<BANNER
+AtlasLives openhands-agent
+Workspace: /data/workspace
+Provider:  OpenRouter
+Model:     anthropic/claude-sonnet-4-5
+Note:      No Docker sandbox — code runs directly on this machine
+BANNER
+
+    # --override-with-envs reads LLM_* env vars at startup (not persisted to config)
+    exec openhands \
+      --override-with-envs \
+      --llm-base-url "https://openrouter.ai/api/v1" \
+      --llm-api-key "${OPENROUTER_API_KEY:-}" \
+      --llm-model "anthropic/claude-sonnet-4-5"
+    ;;
+  *)
+    echo "Unknown openhands-agent command: $command" >&2
+    exit 64
+    ;;
+esac

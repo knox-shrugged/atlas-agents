@@ -11,6 +11,7 @@ const AGENT_KINDS = [
   { value: "goose-agent",       label: "goose-agent — Gemini 2.5 Flash via OpenRouter" },
   { value: "hermes-agent",      label: "hermes-agent — self-improving agent via OpenRouter" },
   { value: "opencode-agent",    label: "opencode-agent — Gemini 2.5 Flash" },
+  { value: "openhands-agent",   label: "openhands-agent — autonomous coding agent via OpenRouter" },
   { value: "pi-agent",          label: "pi-agent — pi.dev via OpenRouter" },
   { value: "shell-agent",       label: "shell-agent — bash" },
 ] as const;

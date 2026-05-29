@@ -134,6 +134,10 @@ export async function provisionGeminiAgent(args) {
   return provisionAgent({ ...args, image: config.geminiRuntimeImage, kind: "gemini-agent" });
 }
 
+export async function provisionOpenHandsAgent(args) {
+  return provisionAgent({ ...args, image: config.openhandsRuntimeImage, kind: "openhands-agent" });
+}
+
 async function provisionAgent({
   appName,
   volumeName,
